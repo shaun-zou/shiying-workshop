@@ -1,0 +1,22 @@
+{
+  "name": "shiying-workshop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "诗影工坊 · 古诗词短视频创作流水线 —— 文本 → 画面 → 声音 → 合成，本地零依赖运行，出真实 MP4",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "check": "node src/cli.ts check",
+    "list": "node src/cli.ts list",
+    "run": "node src/cli.ts run",
+    "batch": "node src/cli.ts batch",
+    "studio": "node src/cli.ts studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}

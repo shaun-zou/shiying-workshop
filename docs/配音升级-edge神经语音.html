@@ -1,0 +1,172 @@
+<!doctype html>
+<!--
+  诗影工坊 · 工坊手记 · 增补页 02 —— 配音升级：Edge 神经语音（单文件 Native HTML）
+  含试听播放（本地 wav 相对路径），双击即开
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>诗影工坊 · 配音升级：Edge 神经语音</title>
+  <style>
+    :root {
+      --bg: #F7F4EC; --surface: #FEFCF6; --surface-2: #F2EDE0;
+      --ink: #23201A; --body: #3B362D; --muted: #6E6A5C;
+      --rule: #E3DCCB; --rule-strong: #CDC5AF; --accent: #B03A2E;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", "SimSun", Georgia, serif;
+      --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+      --measure: 46rem;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--body); font-family: var(--sans); font-size: 15.5px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+    h1, h2, h3 { margin: 0; color: var(--ink); font-weight: 600; text-wrap: balance; }
+    p { margin: 0 0 1em; }
+    a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+    .canvas { max-width: 860px; margin-inline: auto; padding: clamp(40px, 6vw, 88px) clamp(22px, 5vw, 56px) 72px; }
+
+    .cover { padding-bottom: 40px; border-bottom: 1px solid var(--rule-strong); }
+    .cover-kicker { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted); margin-bottom: 26px; }
+    .seal-sm { width: 22px; height: 22px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--surface); font-family: var(--serif); font-size: 13px; line-height: 1; border-radius: 4px; }
+    .cover h1 { font-family: var(--serif); font-size: clamp(32px, 5vw, 50px); line-height: 1.14; letter-spacing: -0.02em; }
+    .cover-sub { margin-top: 14px; font-size: 16.5px; max-width: 40rem; }
+    .cover-meta { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+
+    .section { border-bottom: 1px solid var(--rule-strong); padding: 44px 0 38px; }
+    .section:last-of-type { border-bottom: 0; }
+    .folio { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 22px; }
+    .folio .no { color: var(--ink); font-weight: 500; }
+    .section h2 { font-family: var(--serif); font-size: clamp(23px, 3vw, 29px); line-height: 1.3; margin-bottom: 16px; letter-spacing: -0.01em; }
+    .section h3 { font-size: 16px; margin: 24px 0 8px; }
+    .prose { max-width: var(--measure); }
+    .prose strong, .points strong, .listen-row strong { color: var(--ink); font-weight: 500; }
+
+    ul.points { max-width: var(--measure); margin: 18px 0 6px; }
+    .points li { position: relative; padding: 9px 0 9px 21px; border-bottom: 1px dashed var(--rule); font-size: 14.5px; line-height: 1.75; }
+    .points li:last-child { border-bottom: 0; }
+    .points li::before { content: ""; position: absolute; left: 0; top: 1.45em; width: 9px; height: 1px; background: var(--ink); }
+
+    .listen { margin: 20px 0 6px; max-width: var(--measure); }
+    .listen-row { display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px dashed var(--rule); }
+    .listen-row:last-child { border-bottom: 0; }
+    .listen-row .who { min-width: 168px; }
+    .listen-row .who strong { display: block; font-size: 14.5px; }
+    .listen-row .who span { display: block; font-size: 11.5px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.03em; margin-top: 2px; }
+    .listen-row audio { flex: 1; min-width: 0; height: 34px; }
+
+    .note { border: 1px solid var(--rule-strong); border-radius: 2px; background: color-mix(in oklab, var(--surface) 64%, var(--bg)); padding: 14px 18px; margin: 20px 0; max-width: var(--measure); }
+    .note .note-label { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 6px; }
+    .note p { margin: 0; font-size: 14px; }
+
+    figure.fig { margin: 26px 0 10px; }
+    figure.fig img { display: block; width: 100%; height: auto; border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--surface); }
+    figure.fig figcaption { margin-top: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--muted); line-height: 1.8; }
+
+    .bleed { max-width: none; margin: 20px 0 8px; overflow-x: auto; }
+    table.tbl { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 520px; }
+    .tbl th { text-align: left; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.1em; color: var(--muted); padding: 0 18px 10px 0; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+    .tbl td { vertical-align: top; padding: 12px 18px 12px 0; border-bottom: 1px solid var(--rule); line-height: 1.7; }
+    .tbl tr:last-child td { border-bottom: 0; }
+    .tbl td:first-child { color: var(--ink); font-weight: 500; white-space: nowrap; padding-right: 24px; }
+    .tbl td:last-child { color: var(--muted); font-size: 13.5px; padding-right: 0; }
+
+    .colophon { padding: 40px 0 20px; }
+    .closing { font-family: var(--serif); font-size: 19px; line-height: 1.75; color: var(--ink); max-width: 34rem; margin: 0 0 18px; }
+    .colophon-meta { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+    code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-2); border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+    <header class="cover">
+      <div class="cover-kicker"><span class="seal-sm" aria-hidden="true">坊</span>诗影工坊 · 工坊手记 · 增补页 02</div>
+      <h1>更像真人的朗诵：接入 Edge 神经语音</h1>
+      <p class="cover-sub">三档音色重新映射 · 吟诵节奏调优 · 新旧试听对照 —— 页内可直接播放。</p>
+      <div class="cover-meta">
+        <span>日期：2026-09-23</span>
+        <span>状态：全部验证通过</span>
+        <span>配套：《交付报告》《迭代说明》</span>
+      </div>
+    </header>
+
+    <!-- 01 -->
+    <section class="section">
+      <div class="folio"><span class="no">01 · 改了什么</span><span>配音通道升级</span></div>
+      <h2>从「机器音」换到神经语音，节奏重调</h2>
+      <ul class="points">
+        <li><strong>引擎切换</strong> —— 默认配音从 Windows 系统语音（机械感明显）换成微软 <strong>Edge 神经语音</strong>：韵律自然、真人感强，尤其适合古诗朗诵；免费、免 Key，需要联网（本机已装好並测通）。</li>
+        <li><strong>三档音色重新映射</strong> —— 「云阙 / 清徵 / 松风」不再是同一把嗓子的变声近似，而是三把真正不同的神经音色，各自配音速参数（见下表）。</li>
+        <li><strong>吟诵节奏调优</strong> —— 诗句与旁白之间的停顿 380 → <strong>450ms</strong>、镜尾留白 700 → <strong>750ms</strong>：给朗诵留出「呼吸」，减少赶词感。</li>
+        <li><strong>防呆回退</strong> —— 未安装 edge-tts 或断网时，自动回退系统语音继续出片；离线环境也可在 <code>.env</code> 强制 <code>SHIYING_VOICE_PROVIDER=sapi</code>。</li>
+      </ul>
+      <div class="bleed">
+        <table class="tbl">
+          <thead><tr><th>音色档案</th><th>神经音色</th><th>语速</th><th>定位</th></tr></thead>
+          <tbody>
+            <tr><td>云阙 · 沉静男声</td><td>云健 Yunjian</td><td>−8%</td><td>沉稳开阔，适合五言绝句的低回气质</td></tr>
+            <tr><td>清徵 · 清亮女声</td><td>晓晓 Xiaoxiao</td><td>−4%</td><td>清亮温柔，适合春景与轻快题材</td></tr>
+            <tr><td>松风 · 苍劲男声</td><td>云扬 Yunyang</td><td>−12%</td><td>浑厚苍劲，适合边塞与怀古诗</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 02 -->
+    <section class="section">
+      <div class="folio"><span class="no">02 · 试听</span><span>同一句「床前明月光，疑是地上霜。」</span></div>
+      <h2>先听为快：三档新音色 + 新旧对照</h2>
+      <div class="listen">
+        <div class="listen-row"><div class="who"><strong>云阙 · 云健</strong><span>yunque · zh-CN-YunjianNeural</span></div><audio controls preload="none" src="assets/voice-samples/edge-yunque-sample.wav"></audio></div>
+        <div class="listen-row"><div class="who"><strong>清徵 · 晓晓</strong><span>qingzheng · zh-CN-XiaoxiaoNeural</span></div><audio controls preload="none" src="assets/voice-samples/edge-qingzheng-sample.wav"></audio></div>
+        <div class="listen-row"><div class="who"><strong>松风 · 云扬</strong><span>songfeng · zh-CN-YunyangNeural</span></div><audio controls preload="none" src="assets/voice-samples/edge-songfeng-sample.wav"></audio></div>
+      </div>
+      <div class="prose"><p>下面同句对照：同一档「云阙」，升级前后各一版 ——</p></div>
+      <div class="listen">
+        <div class="listen-row"><div class="who"><strong>升级前 · 系统语音</strong><span>sapi · Huihui（低音塑形近似）</span></div><audio controls preload="none" src="assets/voice-samples/yunque-sample.wav"></audio></div>
+        <div class="listen-row"><div class="who"><strong>升级后 · 神经语音</strong><span>edge · 云健 Yunjian</span></div><audio controls preload="none" src="assets/voice-samples/edge-yunque-sample.wav"></audio></div>
+      </div>
+      <div class="note">
+        <span class="note-label">试听说明</span>
+        <p>样例为同一句古诗的直录（未经额外处理）；浏览器内置播放器可直接播放，也可到 <code>docs/assets/voice-samples/</code> 用本地播放器对照。</p>
+      </div>
+    </section>
+
+    <!-- 03 -->
+    <section class="section">
+      <div class="folio"><span class="no">03 · 验证</span><span>实测记录</span></div>
+      <h2>不是「听起来还行」，是逐项核过</h2>
+      <ul class="points">
+        <li><strong>三档互异</strong> —— 同句合成时长 3312 / 3720 / 3240ms，三档文件两两不同；单段合成约 5–8 秒。</li>
+        <li><strong>全片重渲染</strong> —— 《静夜思》新版朗诵成片产出：70 秒、6 镜，视频流 H.264 + 音频流 44.1kHz 校验通过，配音段目录可见 edge 合成痕迹（.mp3 中间件 + 44.1k 成品）。</li>
+        <li><strong>工作台映射透明</strong> —— 页面「音色映射」直接展示「云阙 = 云健 Yunjian（神经语音）」等对应关系，接口数据同步核验。</li>
+        <li><strong>缓存延续</strong> —— 配音缓存按（音色 + 语速 + 文本）寻址：切档或改文案只重录受影响的段落，其余复用。</li>
+      </ul>
+      <figure class="fig">
+        <img src="assets/voice-upgrade-ui.png" alt="创作台 V2 · 音色映射展示" />
+        <figcaption>创作台 V2 的「音色映射」区：三档档案对应的实际神经音色与语速一目了然（2026-09-23 实机截图）。</figcaption>
+      </figure>
+    </section>
+
+    <!-- 04 -->
+    <section class="section">
+      <div class="folio"><span class="no">04 · 使用</span><span>怎么换、怎么稳</span></div>
+      <h2>切换与边界</h2>
+      <ul class="points">
+        <li><strong>工作台里换音色</strong> —— 点右栏音色 chip 后按「重新合成」：复用已出画面，只用新音色重录配音并重新合成（通常 1–3 分钟）。</li>
+        <li><strong>需要联网</strong> —— 神经语音走微软服务；断网或未装 edge-tts 时自动回退系统语音（仍可出片）。</li>
+        <li><strong>产品化建议</strong> —— 长期使用建议换官方云端语音（Azure / 火山引擎等，自备 Key）：接口形态相近，<code>openai</code> 兼容通道已就位，替换成本低。</li>
+      </ul>
+    </section>
+
+    <footer class="colophon">
+      <p class="closing">诗句值得一把好嗓子。从今往后，吟诵由神经语音来念，停顿与呼吸留给节奏去管。</p>
+      <p style="font-size:14px; color:var(--muted); max-width:44rem;">注：本页所有时长、时长差与校验结果均来自 2026-09-23 本机实测；除试听样例为直录外，成片中的音频经过混音与响度控制。</p>
+      <div class="colophon-meta">
+        <span>诗影工坊 · 创作台 V2</span>
+        <span>配套《交付报告》《迭代说明》</span>
+        <span>工坊手记 · 增补页 02 · 完</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

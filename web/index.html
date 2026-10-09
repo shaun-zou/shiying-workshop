@@ -1,0 +1,1445 @@
+<!doctype html>
+<!--
+  诗影工坊 · 创作台 V2（本地工作台）
+  由《V1 交互原型》改造：模拟函数 → 真实接口
+    · 生成：POST /api/jobs → 轮询进度 → GET 任务视图
+    · 成片：真实 MP4（<video> 播放 /media/<job>/video.mp4）
+    · 分镜：真实意境图缩略图；字幕：真实 .srt 下载
+    · 编辑：逐句释义 / 文案 修改后「重新合成」（复用图片，重做声音与合成）
+  需通过 `node src/cli.ts studio`（或 npm run studio）启动本地服务后访问。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>诗影工坊 · 创作台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%23B03A2E'/%3E%3Ctext%20x='16'%20y='23'%20font-size='19'%20text-anchor='middle'%20fill='%23FEFCF6'%20font-family='Songti%20SC,serif'%3E%E8%AF%97%3C/text%3E%3C/svg%3E" />
+  <style>
+    /* ── tokens（与 V1 原型同一套设计系统） ─────────────────────── */
+    :root {
+      --bg: #F7F4EB; --surface: #FEFCF6; --surface-2: #F3EFE3; --surface-3: #EDE8D8;
+      --fg: #23201A; --muted: #6E6A5C; --border: #E5DFD0; --border-strong: #D2C9B4;
+      --accent: #B03A2E;
+      --accent-soft: color-mix(in oklab, var(--accent) 9%, transparent);
+      --accent-fade: color-mix(in oklab, var(--accent) 18%, transparent);
+      --fg-soft: color-mix(in oklab, var(--fg) 5%, transparent);
+      --stage: #1D1813; --stage-2: #2A231B; --stage-3: #383022;
+      --stage-fg: #EFE7D5; --stage-muted: #AC9F82; --stage-line: rgba(239,231,213,0.16);
+      --gold: #C8A56A; --gold-soft: rgba(200,165,106,0.24);
+      --font-display: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", "SimSun", Georgia, serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+      --fs-body: 15px; --fs-small: 13.5px; --fs-meta: 12px;
+      --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-pill: 999px;
+      --shadow-1: 0 1px 2px rgba(35,32,26,0.05), 0 1px 1px rgba(35,32,26,0.03);
+      --shadow-2: 0 10px 30px -12px rgba(35,32,26,0.18);
+      --focus: 0 0 0 2.5px color-mix(in oklab, var(--accent) 52%, transparent);
+      --t-fast: 120ms; --t-base: 200ms; --t-enter: 320ms;
+      --ease: cubic-bezier(0.2, 0, 0, 1);
+      --grain-url: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='160'%20height='160'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.8'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3C/filter%3E%3Crect%20width='160'%20height='160'%20filter='url(%23n)'%20opacity='0.4'/%3E%3C/svg%3E");
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; color-scheme: light; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: var(--fs-body); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    img, svg { display: block; max-width: 100%; }
+    button { font: inherit; cursor: pointer; color: inherit; }
+    p { margin: 0; }
+    h1,h2,h3,h4 { margin: 0; }
+    ::selection { background: var(--accent-fade); }
+    * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+    *::-webkit-scrollbar { width: 8px; height: 8px; }
+    *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+    :where(a, button, input, textarea, [tabindex], [contenteditable]):focus-visible { outline: none; box-shadow: var(--focus); border-radius: var(--r-sm); }
+    .i { width: 16px; height: 16px; flex: none; }
+    .hidden { display: none !important; }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    /* ── shell ──────────────────────────────────────────────────── */
+    .app { display: grid; grid-template-rows: auto auto minmax(0,1fr) auto; height: 100dvh; min-height: 560px; }
+    .appbar { display: flex; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface); position: relative; z-index: 30; }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-seal { width: 30px; height: 30px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--surface); border-radius: 8px; font-family: var(--font-display); font-size: 17px; line-height: 1; transform: rotate(-2deg); box-shadow: var(--shadow-1); }
+    .brand-name { font-family: var(--font-display); font-size: 18px; white-space: nowrap; }
+    .brand-sub { font-size: var(--fs-meta); color: var(--muted); padding-left: 10px; border-left: 1px solid var(--border); white-space: nowrap; }
+    .project-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 320px; padding: 5px 12px; border: 1px solid var(--border); background: var(--surface-2); border-radius: var(--r-pill); font-size: var(--fs-small); white-space: nowrap; overflow: hidden; }
+    .project-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in oklab, var(--muted) 55%, transparent); flex: none; }
+    .project-chip[data-state="ready"] .dot { background: var(--accent); }
+    .project-chip[data-state="busy"] .dot { background: var(--gold); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .project-chip .pc-name { font-family: var(--font-display); font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+    .appbar-spacer { flex: 1; }
+    .appbar-actions { display: flex; align-items: center; gap: 8px; }
+    .conn-chip { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--border-strong); color: var(--muted); white-space: nowrap; }
+    .conn-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+    .conn-chip[data-ok="1"] .dot { background: #3E7C4F; }
+    .conn-chip[data-ok="0"] .dot { background: var(--accent); }
+
+    .icon-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--muted); transition: all var(--t-fast) var(--ease); }
+    .icon-btn:hover { color: var(--fg); background: var(--fg-soft); }
+    .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border-radius: 9px; border: 1px solid transparent; font-size: 14px; font-weight: 500; transition: all var(--t-fast) var(--ease); white-space: nowrap; }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+    .btn-primary:hover:not(:disabled) { background: color-mix(in oklab, var(--accent), black 10%); }
+    .btn-secondary { background: transparent; border-color: var(--border-strong); color: var(--fg); }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--fg); }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); padding-inline: 10px; }
+    .btn-ghost:hover:not(:disabled) { color: var(--fg); background: var(--fg-soft); }
+    .btn-sm { padding: 6px 11px; font-size: 13px; border-radius: 8px; }
+    .btn-block { width: 100%; }
+
+    /* ── 流程条 ─────────────────────────────────────────────────── */
+    .pipeline { display: flex; align-items: center; gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--surface) 60%, var(--bg)); position: relative; z-index: 20; }
+    .pipeline-track { display: flex; align-items: center; list-style: none; margin: 0; padding: 0; min-width: 0; flex: 1; overflow-x: auto; }
+    .pc { display: flex; align-items: center; gap: 9px; padding: 3px 4px; flex: none; }
+    .pc-marker { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid var(--border-strong); font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: var(--surface); transition: all var(--t-base) var(--ease); }
+    .pc-text { display: flex; flex-direction: column; line-height: 1.25; }
+    .pc-label { font-size: var(--fs-small); font-weight: 500; white-space: nowrap; }
+    .pc-sub { font-size: 11px; color: var(--muted); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+    .pc-link { flex: 1 1 14px; min-width: 10px; height: 1px; background: var(--border-strong); margin: 0 10px; align-self: center; }
+    .pc[data-state="done"] .pc-marker { border-color: var(--accent); color: var(--accent); }
+    .pc[data-state="running"] .pc-marker { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); animation: markerPulse 1.4s var(--ease) infinite; }
+    @keyframes markerPulse { 0%,100% { box-shadow: 0 0 0 0 var(--accent-fade); } 55% { box-shadow: 0 0 0 7px transparent; } }
+    .pc[data-state="pending"] { opacity: 0.72; }
+    .pipeline-aside { display: flex; align-items: center; gap: 12px; flex: none; }
+    .overall-wrap { display: flex; align-items: center; gap: 9px; }
+    .overall-bar { width: 110px; height: 5px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+    .overall-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 4px; transition: width var(--t-base) var(--ease); }
+    .overall-num { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); min-width: 34px; text-align: right; }
+    .pipeline-status { font-size: var(--fs-small); color: var(--muted); max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pipeline-status strong { color: var(--fg); font-weight: 500; }
+
+    /* ── workspace 三栏 ─────────────────────────────────────────── */
+    .workspace { display: grid; grid-template-columns: 292px minmax(0,1fr) 396px; gap: 14px; padding: 14px; overflow: hidden; min-height: 0; }
+    .panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-1); overflow: hidden; }
+    .panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex: none; background: color-mix(in oklab, var(--surface) 70%, var(--bg)); }
+    .ph-icon { color: var(--muted); }
+    .panel-title { font-size: 16px; font-weight: 600; }
+    .panel-meta { font-size: var(--fs-meta); color: var(--muted); }
+    .panel-head-spacer { flex: 1; }
+    .panel-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .panel-foot { flex: none; padding: 10px 16px; border-top: 1px solid var(--border); font-size: var(--fs-meta); color: var(--muted); display: flex; align-items: center; gap: 8px; }
+
+    /* 左栏：选诗 */
+    .poem-form { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .field-label { font-size: var(--fs-small); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+    .field-label .opt { font-size: 11px; color: var(--muted); font-weight: 400; }
+    .textarea { width: 100%; min-height: 108px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--fg); font: inherit; font-size: 14.5px; line-height: 1.7; resize: vertical; }
+    .textarea:hover { border-color: var(--border-strong); }
+    .textarea[aria-invalid="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 4%, var(--surface)); }
+    .form-error { display: flex; align-items: flex-start; gap: 7px; font-size: var(--fs-small); color: var(--accent); }
+    .form-hint { font-size: var(--fs-meta); color: var(--muted); line-height: 1.55; }
+    .btn-row { display: flex; gap: 8px; align-items: center; }
+    .divider-label { display: flex; align-items: center; gap: 12px; padding: 4px 16px 0; font-size: var(--fs-meta); color: var(--muted); }
+    .divider-label::before, .divider-label::after { content: ""; height: 1px; background: var(--border); flex: 1; }
+    .lib-list { list-style: none; margin: 0; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .lib-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 12px; padding: 11px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); transition: all var(--t-fast) var(--ease); }
+    .lib-item:hover { border-color: var(--border-strong); background: var(--surface-2); }
+    .lib-item[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .lib-main { min-width: 0; flex: 1; }
+    .lib-title { font-family: var(--font-display); font-size: 16px; display: flex; align-items: baseline; gap: 8px; }
+    .lib-title .lib-dyn { font-family: var(--font-body); font-size: var(--fs-meta); color: var(--muted); }
+    .lib-snippet { display: block; font-size: var(--fs-meta); color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lib-tag { flex: none; font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 1px 8px; }
+
+    /* 中栏 */
+    .notice { margin: 14px 18px 0; border: 1px solid color-mix(in oklab, var(--gold) 45%, var(--border)); background: color-mix(in oklab, var(--gold) 8%, var(--surface)); border-radius: var(--r-md); padding: 10px 13px; font-size: var(--fs-small); line-height: 1.7; color: color-mix(in oklab, var(--fg) 85%, var(--muted)); }
+    .notice .n-title { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em; color: var(--muted); display: block; margin-bottom: 4px; }
+    .section-block { padding: 16px 18px; }
+    .section-block + .section-block { border-top: 1px solid var(--border); }
+    .section-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; flex-wrap: wrap; }
+    .sh-icon { color: var(--muted); }
+    .section-title { font-size: 16px; font-weight: 600; }
+    .section-note { font-size: var(--fs-meta); color: var(--muted); }
+    .section-head-spacer { flex: 1; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 9px; border-radius: var(--r-pill); border: 1px solid var(--border); color: var(--muted); background: var(--surface); white-space: nowrap; }
+    .badge-accent { border-color: color-mix(in oklab, var(--accent) 38%, transparent); color: var(--accent); background: var(--accent-soft); }
+    .badge .i { width: 12px; height: 12px; }
+    .gloss-list { list-style: none; margin: 0; padding: 0; }
+    .gloss-item { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: 10px; padding: 13px 2px; }
+    .gloss-item + .gloss-item { border-top: 1px dashed var(--border); }
+    .gloss-index { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); padding-top: 6px; }
+    .gloss-line { font-family: var(--font-display); font-size: 20px; line-height: 1.5; letter-spacing: 0.03em; }
+    .gloss-text { margin-top: 5px; font-size: 14.5px; line-height: 1.8; color: color-mix(in oklab, var(--fg) 84%, var(--muted)); }
+    [contenteditable="true"] { outline: 2px dashed color-mix(in oklab, var(--accent) 50%, transparent); outline-offset: 3px; border-radius: 4px; background: color-mix(in oklab, var(--surface) 55%, var(--bg)); cursor: text; }
+    .edit-btn { opacity: 0.5; }
+    .gloss-item:hover .edit-btn, .sc-block:hover .edit-btn { opacity: 1; }
+    .edit-btn[aria-pressed="true"] { opacity: 1; color: var(--accent); }
+    .notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .note-card { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); padding: 13px 14px; min-width: 0; }
+    .note-card.span-2 { grid-column: 1 / -1; }
+    .nc-head { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+    .nc-icon { color: var(--muted); width: 15px; height: 15px; }
+    .nc-label { font-size: var(--fs-meta); letter-spacing: 0.06em; color: var(--muted); font-family: var(--font-mono); }
+    .nc-title { font-family: var(--font-display); font-size: 15px; margin-left: auto; color: var(--muted); }
+    .nc-text { font-size: 13.5px; line-height: 1.8; color: color-mix(in oklab, var(--fg) 86%, var(--muted)); }
+    .script-meta-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    .script-name { font-family: var(--font-display); font-size: 18px; }
+    .sc-block { display: grid; grid-template-columns: 58px minmax(0,1fr) auto; gap: 12px; padding: 12px 0; }
+    .sc-block + .sc-block { border-top: 1px dashed var(--border); }
+    .persona-block { border-top: 1px dashed var(--border); }
+    .persona-off { font-size: var(--fs-small); color: var(--muted); padding: 10px 0 2px; }
+    .sc-lab { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--muted); padding-top: 5px; white-space: nowrap; }
+    .sc-cue { display: inline-block; font-family: var(--font-display); font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--border-strong); padding-left: 8px; margin-bottom: 6px; }
+    .sc-text { font-size: 14.5px; line-height: 1.85; color: color-mix(in oklab, var(--fg) 92%, var(--muted)); }
+    .script-seal { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .seal-mark { width: 46px; height: 46px; border: 2.5px solid var(--accent); border-radius: 9px; color: var(--accent); display: grid; grid-template-columns: 1fr 1fr; place-items: center; font-family: var(--font-display); font-size: 14px; line-height: 1; transform: rotate(-4deg); opacity: 0.9; user-select: none; }
+
+    /* 右栏：舞台 */
+    .stage-wrap { padding: 14px; }
+    .stage-box { position: relative; border-radius: var(--r-lg); background: linear-gradient(180deg, var(--stage), color-mix(in oklab, var(--stage), black 22%)); padding: 18px 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; overflow: hidden; }
+    .stage-box::after { content: ""; position: absolute; inset: 0; background-image: var(--grain-url); opacity: 0.15; mix-blend-mode: soft-light; pointer-events: none; border-radius: inherit; }
+    .phone { position: relative; z-index: 1; width: min(100%, 250px); padding: 7px; border-radius: 22px; background: linear-gradient(165deg, var(--stage-3), var(--stage-2)); box-shadow: 0 22px 44px -20px rgba(0,0,0,0.65), inset 0 1px 0 rgba(239,231,213,0.08); }
+    .phone-screen { position: relative; aspect-ratio: 9 / 16; border-radius: 16px; overflow: hidden; background: var(--stage-2); }
+    .phone-screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+    .scene-top { position: absolute; top: 9px; left: 11px; right: 11px; z-index: 3; display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: color-mix(in oklab, var(--stage-fg) 50%, transparent); pointer-events: none; }
+    .phone-progress { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3; height: 2px; border-radius: 2px; background: var(--stage-line); overflow: hidden; }
+    .phone-progress-fill { height: 100%; width: 0%; background: var(--gold); }
+    .gen-overlay { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 13px; background: color-mix(in oklab, var(--stage) 92%, transparent); text-align: center; padding: 18px; }
+    .gen-ring { --p: 0; position: relative; width: 62px; height: 62px; border-radius: 50%; background: conic-gradient(var(--gold) calc(var(--p) * 1%), var(--stage-line) 0); }
+    .gen-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--stage); }
+    .gen-percent { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font-family: var(--font-mono); font-size: 13px; color: var(--stage-fg); }
+    .gen-status { font-size: 12px; color: var(--stage-muted); line-height: 1.6; max-width: 26ch; }
+    .stage-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; padding: 20px; text-align: center; }
+    .se-icon { color: color-mix(in oklab, var(--stage-fg) 35%, transparent); }
+    .se-title { font-family: var(--font-display); font-size: 16px; color: var(--stage-fg); }
+    .se-text { font-size: 12px; color: var(--stage-muted); line-height: 1.7; max-width: 22ch; }
+    .stage-controls { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
+    .ctrl-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--stage-line); background: transparent; color: var(--stage-fg); display: grid; place-items: center; transition: all var(--t-fast) var(--ease); }
+    .ctrl-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--stage-fg) 10%, transparent); }
+    .ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .ctrl-play { width: 44px; height: 44px; background: var(--stage-fg); color: var(--stage); border-color: var(--stage-fg); }
+    .time-code { font-family: var(--font-mono); font-size: 11.5px; color: var(--stage-muted); min-width: 84px; text-align: center; }
+
+    /* 审核确认块（两段式流程） */
+    .review-block { margin: 14px 14px 0; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface); padding: 15px 16px 14px; }
+    .rb-kicker { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--accent); margin-bottom: 6px; }
+    .rb-title { font-family: var(--font-display); font-size: 18px; margin-bottom: 6px; }
+    .rb-text { font-size: 13px; line-height: 1.78; color: color-mix(in oklab, var(--fg) 82%, var(--muted)); margin-bottom: 10px; }
+    .rb-text b { color: var(--fg); font-weight: 600; }
+    .rb-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); line-height: 1.9; margin-bottom: 12px; word-break: break-all; }
+    .sub-block { padding: 14px 16px; border-top: 1px solid var(--border); }
+    .sub-block-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .sub-title { font-size: 14px; font-weight: 600; }
+    .sub-meta { font-size: var(--fs-meta); color: var(--muted); margin-left: auto; }
+    .sb-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+    .sb-item { flex: none; width: 64px; background: transparent; border: none; padding: 0; text-align: left; }
+    .sb-thumb { display: block; position: relative; width: 64px; aspect-ratio: 9/16; border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border); background: var(--stage-2); }
+    .sb-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .sb-item:hover .sb-thumb { border-color: var(--border-strong); }
+    .sb-item[aria-current="true"] .sb-thumb { border-color: var(--accent); }
+    .sb-idx { position: absolute; top: 3px; left: 4px; z-index: 2; font-family: var(--font-mono); font-size: 9px; color: color-mix(in oklab, var(--stage-fg) 75%, transparent); text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+    .sb-label { display: block; font-size: 10.5px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
+    .opt-row { display: flex; flex-direction: column; gap: 8px; }
+    .opt-row + .opt-row { margin-top: 12px; }
+    .opt-label { font-size: var(--fs-small); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+    .opt-label .opt-hint { font-weight: 400; font-size: var(--fs-meta); color: var(--muted); margin-left: auto; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chip-opt { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--surface); font-size: var(--fs-small); }
+    .chip-opt:hover { border-color: var(--border-strong); }
+    .chip-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .export-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .export-note { font-size: var(--fs-meta); color: var(--muted); margin-top: 9px; line-height: 1.6; }
+
+    .rerun-bar { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: color-mix(in oklab, var(--surface) 70%, var(--bg)); }
+    .rerun-hint { font-size: var(--fs-meta); color: var(--muted); flex: 1; line-height: 1.5; }
+    .fresh-opt { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); color: var(--muted); white-space: nowrap; user-select: none; cursor: pointer; }
+    .fresh-opt input { accent-color: var(--accent); margin: 0; }
+    .fresh-opt:hover { color: var(--fg); }
+
+    /* 空态 / 骨架 / toast */
+    .empty-state { padding: 26px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+    .empty-title { font-family: var(--font-display); font-size: 17px; }
+    .empty-text { font-size: var(--fs-small); color: var(--muted); max-width: 36ch; line-height: 1.75; }
+    .sk { position: relative; overflow: hidden; background: color-mix(in oklab, var(--fg) 6%, var(--surface-3)); border-radius: 6px; color: transparent; user-select: none; }
+    .sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 25%, color-mix(in oklab, var(--surface) 75%, transparent) 50%, transparent 75%); transform: translateX(-100%); animation: shimmer 1.4s var(--ease) infinite; }
+    .sk-line { height: 12px; margin: 7px 0; border-radius: 4px; }
+    .w-40 { width: 40%; } .w-60 { width: 60%; } .w-75 { width: 75%; } .w-90 { width: 90%; }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+    .reveal { animation: fadeUp var(--t-enter) var(--ease) both; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+    .toast-stack { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 90; pointer-events: none; }
+    .toast { pointer-events: auto; display: flex; align-items: center; gap: 9px; background: var(--fg); color: var(--bg); border-radius: var(--r-pill); padding: 9px 16px; font-size: var(--fs-small); box-shadow: var(--shadow-2); animation: toastIn var(--t-enter) var(--ease) both; max-width: min(92vw, 460px); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+    /* 服务未连接覆盖层 */
+    .conn-overlay { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); }
+    .conn-card { width: min(520px, calc(100vw - 40px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-2); padding: 26px 28px; }
+    .conn-card h2 { font-family: var(--font-display); font-size: 21px; margin-bottom: 10px; }
+    .conn-card p { font-size: 14px; line-height: 1.85; color: color-mix(in oklab, var(--fg) 86%, var(--muted)); margin-bottom: 10px; }
+    .conn-code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 12px; margin: 10px 0; user-select: all; }
+
+    dialog.dlg { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); color: var(--fg); padding: 0; width: min(560px, calc(100vw - 36px)); box-shadow: var(--shadow-2); }
+    dialog.dlg::backdrop { background: color-mix(in oklab, var(--fg) 46%, transparent); }
+    .dlg-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .dlg-title { font-family: var(--font-display); font-size: 19px; }
+    .dlg-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 13px; max-height: 62vh; overflow-y: auto; }
+    .dlg-body p { font-size: 14px; line-height: 1.85; color: color-mix(in oklab, var(--fg) 86%, var(--muted)); }
+    .dlg-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+    .dlg-step { display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 11px; }
+    .dlg-step .n { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-family: var(--font-mono); font-size: 12px; }
+    .dlg-step .st { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+    .dlg-step .sx { font-size: var(--fs-small); color: var(--muted); line-height: 1.7; }
+    .dlg-actions { padding: 13px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+    .dlg-kbd { display: inline-block; font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--surface-2); }
+
+    .pagefoot { display: flex; align-items: center; gap: 14px; padding: 8px 20px; border-top: 1px solid var(--border); background: var(--surface); font-size: var(--fs-meta); color: var(--muted); }
+    .pagefoot .pf-spacer { flex: 1; }
+
+    @media (max-width: 1280px) { .workspace { grid-template-columns: 262px minmax(0,1fr) 356px; gap: 12px; padding: 12px; } .phone { width: min(100%, 228px); } }
+    @media (max-width: 1119px) { .workspace { grid-template-columns: 238px minmax(0,1fr) 328px; gap: 10px; } .phone { width: min(100%, 206px); } }
+    @media (max-width: 1023px) {
+      .app { height: auto; min-height: 100dvh; }
+      .workspace { grid-template-columns: 1fr; overflow: visible; }
+      .panel, .panel-scroll { overflow: visible; }
+      .col-input { order: 1; } .col-stage { order: 2; } .col-analyze { order: 3; }
+      .stage-wrap { display: flex; flex-direction: column; align-items: center; }
+      .stage-box { width: 100%; max-width: 560px; }
+      .pipeline { flex-wrap: wrap; row-gap: 6px; }
+      .pipeline-aside { flex: 1 1 100%; justify-content: flex-end; }
+    }
+    @media (max-width: 639px) {
+      .appbar { padding: 8px 12px; gap: 8px; }
+      .brand-sub, .conn-chip { display: none; }
+      .workspace { padding: 10px; gap: 10px; }
+      .notes-grid { grid-template-columns: 1fr; }
+      .note-card.span-2 { grid-column: auto; }
+      .export-grid { grid-template-columns: 1fr; }
+      .sc-block { grid-template-columns: 46px minmax(0,1fr) auto; gap: 9px; }
+      .gloss-item { grid-template-columns: 24px minmax(0,1fr) auto; gap: 8px; }
+      .gloss-line { font-size: 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; } .sk::after { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="appbar">
+      <div class="brand">
+        <span class="brand-seal" aria-hidden="true">诗</span>
+        <span class="brand-name">诗影工坊</span>
+        <span class="brand-sub">创作台 · 本地工作台</span>
+      </div>
+      <span class="project-chip" id="projectChip" data-state="empty" title="当前作品">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="pc-name" id="projectChipName">未命名作品</span>
+      </span>
+      <span class="appbar-spacer"></span>
+      <div class="appbar-actions">
+        <span class="conn-chip" id="connChip" data-ok="0"><span class="dot"></span><span id="connText">连接中…</span></span>
+        <button class="btn btn-ghost" id="btnNew" type="button">
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          新建作品
+        </button>
+        <button class="btn btn-secondary" id="btnHelp" type="button">
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 0 1 4.9.6c0 1.7-2.5 2.1-2.5 3.6"/><circle cx="12" cy="17.2" r="0.6" fill="currentColor" stroke="none"/></svg>
+          使用说明
+        </button>
+        <button class="btn btn-primary" id="btnOpenVideo" type="button" disabled>
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4"/><path d="M5 19h14"/></svg>
+          导出成片
+        </button>
+      </div>
+    </header>
+
+    <section class="pipeline" aria-label="生成流程">
+      <ol class="pipeline-track" id="pipelineTrack">
+        <li class="pc" data-stage="text" data-state="pending"><span class="pc-marker" aria-hidden="true"><span class="pc-num">1</span></span><span class="pc-text"><span class="pc-label">文本</span><span class="pc-sub" data-sub>释义 · 背景 · 文案</span></span></li>
+        <li class="pc-link" aria-hidden="true"></li>
+        <li class="pc" data-stage="scenes" data-state="pending"><span class="pc-marker" aria-hidden="true"><span class="pc-num">2</span></span><span class="pc-text"><span class="pc-label">分镜</span><span class="pc-sub" data-sub>镜头排布</span></span></li>
+        <li class="pc-link" aria-hidden="true"></li>
+        <li class="pc" data-stage="images" data-state="pending"><span class="pc-marker" aria-hidden="true"><span class="pc-num">3</span></span><span class="pc-text"><span class="pc-label">画面</span><span class="pc-sub" data-sub>意境图</span></span></li>
+        <li class="pc-link" aria-hidden="true"></li>
+        <li class="pc" data-stage="voice" data-state="pending"><span class="pc-marker" aria-hidden="true"><span class="pc-num">4</span></span><span class="pc-text"><span class="pc-label">声音</span><span class="pc-sub" data-sub>朗诵 · 配乐</span></span></li>
+        <li class="pc-link" aria-hidden="true"></li>
+        <li class="pc" data-stage="compose" data-state="pending"><span class="pc-marker" aria-hidden="true"><span class="pc-num">5</span></span><span class="pc-text"><span class="pc-label">合成</span><span class="pc-sub" data-sub>字幕 · 成片</span></span></li>
+      </ol>
+      <div class="pipeline-aside">
+        <div class="overall-wrap">
+          <div class="overall-bar"><div class="overall-fill" id="overallFill"></div></div>
+          <span class="overall-num" id="overallNum">0%</span>
+        </div>
+        <p class="pipeline-status" id="pipelineStatus" role="status">等待开始</p>
+      </div>
+    </section>
+
+    <main class="workspace">
+      <h1 class="sr-only">诗影工坊创作台</h1>
+
+      <!-- 左栏 · 选诗 -->
+      <section class="panel col-input" aria-label="选择诗词">
+        <div class="panel-head">
+          <svg class="i-lg ph-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h9.5a4.5 4.5 0 0 1 4.5 4.5V19.5H9A4 4 0 0 1 5 15.5z"/><path d="M5 15.5A4 4 0 0 1 9 19.5"/><path d="M9.5 8.5h5M9.5 12h5"/></svg>
+          <span class="panel-title">选一首诗</span>
+          <span class="panel-head-spacer"></span>
+          <span class="panel-meta" id="libMeta">诗词库加载中…</span>
+        </div>
+        <div class="panel-scroll">
+          <div class="poem-form">
+            <label class="field-label" for="poemInput">输入诗词 <span class="opt">· 支持粘贴全文</span></label>
+            <textarea class="textarea" id="poemInput" spellcheck="false" placeholder="例如：床前明月光，疑是地上霜。举头望明月，低头思故乡。"></textarea>
+            <p class="form-error hidden" id="poemError" role="alert">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.4" r="0.7" fill="currentColor" stroke="none"/></svg>
+              <span id="poemErrorText">请先输入诗词，或从下方诗词库选择一首。</span>
+            </p>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="btnGenerate" type="button">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 13.8 9l5.5 1.8-5.5 1.8L12 18l-1.8-5.4L4.7 10.8 10.2 9z"/></svg>
+                生成解析与文案
+              </button>
+              <button class="btn btn-ghost" id="btnClear" type="button">清空</button>
+            </div>
+            <p class="form-hint">先生成解析与文案供你审核；在右侧选好音色与配乐，确认后再生成成片（生图 / 配音 / 合成）。</p>
+          </div>
+          <div class="divider-label">或者，从诗词库选择</div>
+          <ul class="lib-list" id="libList"></ul>
+          <div class="divider-label">最近的作品</div>
+          <ul class="lib-list" id="worksList"></ul>
+        </div>
+        <div class="panel-foot">
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r="0.7" fill="currentColor" stroke="none"/></svg>
+          <span id="inputFootNote">任意诗词均可生成；离线模式对未收录诗词产出「纯朗诵版」。</span>
+        </div>
+      </section>
+
+      <!-- 中栏 · 解析与文案 -->
+      <section class="panel col-analyze" aria-label="解析与文案">
+        <div class="panel-head">
+          <svg class="i-lg ph-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 5.5h15v13h-15z"/><path d="M8 9.5h8M8 12.5h8M8 15.5h4.5"/></svg>
+          <span class="panel-title">解析与文案</span>
+          <span class="panel-head-spacer"></span>
+          <span class="panel-meta" id="analysisMeta">未选择诗词</span>
+        </div>
+        <div class="panel-scroll" id="analyzeScroll">
+          <div id="tipsBox"></div>
+          <section class="section-block">
+            <div class="section-head">
+              <h2 class="section-title">逐句释义</h2>
+              <span class="section-note" id="glossNote">等待生成</span>
+              <span class="section-head-spacer"></span>
+              <span class="badge badge-accent hidden" id="glossEditedBadge">已修改</span>
+            </div>
+            <ol class="gloss-list" id="glossList"></ol>
+          </section>
+          <section class="section-block">
+            <div class="section-head">
+              <h2 class="section-title">背景知识</h2>
+              <span class="section-note" id="notesNote">等待生成</span>
+            </div>
+            <div class="notes-grid" id="notesGrid"></div>
+          </section>
+          <section class="section-block">
+            <div class="section-head">
+              <h2 class="section-title">故事化短视频文案</h2>
+              <span class="section-note" id="scriptNote">等待生成</span>
+            </div>
+            <div id="scriptBody"></div>
+            <div id="personaNote" class="hidden"></div>
+          </section>
+        </div>
+        <div class="rerun-bar">
+          <span class="rerun-hint" id="rerunHint">生成成片后可在此应用修改。</span>
+          <label class="fresh-opt hidden" id="freshOpt" title="忽略缓存与复用，按当前文案重新生成全部分镜意境图（会消耗 AI 出图额度）"><input type="checkbox" id="chkFreshImages" /> 重新生成意境图</label>
+          <button class="btn btn-primary btn-sm" id="btnRerun" type="button" disabled>
+            <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.6 5.9"/><path d="M20 5v6h-6"/></svg>
+            应用修改并重新合成
+          </button>
+        </div>
+      </section>
+
+      <!-- 右栏 · 成片 -->
+      <section class="panel col-stage" aria-label="成片预览">
+        <div class="panel-head">
+          <svg class="i-lg ph-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="2"/><path d="M9.5 5.5 11 9M14.5 5.5 16 9"/><path d="M9.5 14.5v-3l3.5 1.5z"/></svg>
+          <span class="panel-title">成片预览</span>
+          <span class="panel-head-spacer"></span>
+          <span class="panel-meta" id="stageMeta">竖屏 9:16</span>
+        </div>
+        <div class="panel-scroll">
+          <div class="review-block hidden" id="reviewBlock">
+            <div class="rb-kicker">待确认</div>
+            <div class="rb-title">解析与文案已就绪</div>
+            <p class="rb-text">先在中栏审核修改释义与文案，并在下方选好朗诵音色与配乐。确认后开始生成：<b>分镜意境图 → 朗诵配音 → 字幕与合成</b>（视通道约 2-4 分钟）。</p>
+            <div class="rb-meta" id="reviewMeta"></div>
+            <button class="btn btn-primary btn-block" id="btnConfirmRender" type="button">
+              <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4"/><path d="M5 19h14"/></svg>
+              开始生成成片
+            </button>
+          </div>
+          <div class="stage-wrap">
+            <div class="stage-box" id="stageBox" tabindex="0" aria-label="成片预览播放区：空格播放或暂停，左右方向键切换分镜">
+              <div class="phone">
+                <div class="phone-screen" id="phoneScreen">
+                  <video id="phoneVideo" playsinline preload="metadata"></video>
+                  <div class="scene-top"><span>诗影工坊</span><span id="sceneIdx">00 / 00</span></div>
+                  <div class="phone-progress"><div class="phone-progress-fill" id="phoneProgress"></div></div>
+                  <div class="gen-overlay hidden" id="genOverlay">
+                    <div class="gen-ring" id="genRing"><span class="gen-percent" id="genPercent">0%</span></div>
+                    <p class="gen-status" id="genStatus">正在准备…</p>
+                  </div>
+                  <div class="stage-empty" id="stageEmpty">
+                    <svg class="se-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="13" rx="2"/><path d="M10 10l4.5 3-4.5 3z"/></svg>
+                    <div class="se-title">等待生成</div>
+                    <div class="se-text">选择或输入一首诗词，先生成解析与文案，确认后成片会在这里播放。</div>
+                  </div>
+                </div>
+              </div>
+              <div class="stage-controls">
+                <button class="ctrl-btn" id="btnPrev" type="button" aria-label="上一分镜" disabled>
+                  <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5 8.5 12l6 5.5"/></svg>
+                </button>
+                <button class="ctrl-btn ctrl-play" id="btnPlay" type="button" aria-label="播放" disabled>
+                  <svg class="i-lg" id="playIcon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M9 6.2v11.6l9.2-5.8z"/></svg>
+                </button>
+                <button class="ctrl-btn" id="btnNext" type="button" aria-label="下一分镜" disabled>
+                  <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5 15.5 12l-6 5.5"/></svg>
+                </button>
+                <span class="time-code" id="timeCode">00:00 / 00:00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sub-block">
+            <div class="sub-block-head">
+              <span class="sub-title">分镜脚本</span>
+              <span class="sub-meta" id="sbMeta">等待生成</span>
+            </div>
+            <div class="sb-strip" id="sbStrip"></div>
+          </div>
+
+          <div class="sub-block">
+            <div class="sub-block-head">
+              <span class="sub-title">朗诵与配乐</span>
+              <span class="sub-meta" id="voiceMeta">本地服务</span>
+            </div>
+            <div class="opt-row">
+              <span class="opt-label">朗诵音色 <span class="opt-hint" id="voiceHint">审核时选好 · 确认生成时生效</span></span>
+              <div class="chip-row" id="voiceRow" role="group" aria-label="朗诵音色"></div>
+              <p class="form-hint" id="voiceMapNote"></p>
+            </div>
+            <div class="opt-row">
+              <span class="opt-label">背景音乐 <span class="opt-hint">轻声铺底</span></span>
+              <div class="chip-row" id="bgmRow" role="group" aria-label="背景音乐"></div>
+            </div>
+          </div>
+
+          <div class="sub-block">
+            <div class="sub-block-head">
+              <span class="sub-title">导出与分享</span>
+            </div>
+            <div class="export-grid">
+              <button class="btn btn-secondary" id="btnCopyScript" type="button" disabled>
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M5.5 15.5h-1v-11h11v1"/></svg>
+                复制文案
+              </button>
+              <a class="btn btn-secondary" id="btnSrt" href="#" download role="button" aria-disabled="true" style="pointer-events:none;opacity:.45;">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="M7.5 15.5h3M13.5 15.5h3"/></svg>
+                字幕 .srt
+              </a>
+              <a class="btn btn-primary" id="btnVideo" href="#" download role="button" aria-disabled="true" style="grid-column:1/-1;pointer-events:none;opacity:.45;">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4"/><path d="M5 19h14"/></svg>
+                下载成片 MP4
+              </a>
+            </div>
+            <p class="export-note" id="exportNote">成片、字幕、文案均由本地流水线真实产出。</p>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.8" r="0.7" fill="currentColor" stroke="none"/></svg>
+          <span id="stageFootNote">空格播放/暂停 · ← → 切换分镜</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pagefoot">
+      <span>诗影工坊 · 创作台 V2</span>
+      <span class="pf-spacer"></span>
+      <span id="footNote">文本 → 画面 → 声音 → 合成 · 本地流水线真实渲染</span>
+    </footer>
+  </div>
+
+  <dialog class="dlg" id="dlgHelp" aria-labelledby="dlgHelpTitle">
+    <div class="dlg-head">
+      <svg class="i-lg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5 6 15l9.5-9.5a2.1 2.1 0 0 1 3 3L9 18z"/><path d="M14 7l3 3"/></svg>
+      <h2 class="dlg-title" id="dlgHelpTitle">怎么用诗影工坊创作台</h2>
+      <span style="flex:1;"></span>
+      <button class="icon-btn" id="btnHelpClose" type="button" aria-label="关闭">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>
+      </button>
+    </div>
+    <div class="dlg-body">
+      <ol class="dlg-steps">
+        <li class="dlg-step"><span class="n">1</span><div><div class="st">选诗，先生成解析与文案</div><div class="sx">从诗词库选择或粘贴任意诗词，点「生成解析与文案」。此阶段只产出文本，不消耗生图与配音。审核通过之前不会启动重成本环节。</div></div></li>
+        <li class="dlg-step"><span class="n">2</span><div><div class="st">审核修改，定音色配乐</div><div class="sx">逐句释义、背景知识与文案均可点铅笔直接修改；句镜旁白与画面取自「逐句释义」，开场与收尾为故事文案。在右侧选好朗诵音色与背景音乐。</div></div></li>
+        <li class="dlg-step"><span class="n">3</span><div><div class="st">确认，开始生成成片</div><div class="sx">点「开始生成成片」，依次执行：分镜意境图 → 朗诵配音 → 字幕烧制与合成。成片后继续修改，可点「重新合成」（复用已出画面，只重做声音与合成；勾选「重新生成意境图」可让画面按新文案全量重出）。</div></div></li>
+        <li class="dlg-step"><span class="n">4</span><div><div class="st">预览与导出</div><div class="sx">右侧预览真实成片：下载成片 MP4、导出字幕 .srt、复制文案。</div></div></li>
+      </ol>
+      <p>快捷键：聚焦预览区后，<span class="dlg-kbd">空格</span> 播放 / 暂停，<span class="dlg-kbd">←</span> <span class="dlg-kbd">→</span> 切换分镜。</p>
+      <p class="muted">本页由本地服务（node src/cli.ts studio）驱动，成片为本机真实渲染，不经过任何外部服务。</p>
+    </div>
+    <div class="dlg-actions"><button class="btn btn-primary" id="btnHelpOk" type="button">知道了</button></div>
+  </dialog>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+  <div class="conn-overlay hidden" id="connOverlay">
+    <div class="conn-card">
+      <h2>本地服务没有响应</h2>
+      <p>创作台需要通过诗影工坊的本地服务访问。请回到项目目录启动：</p>
+      <div class="conn-code">npm run studio</div>
+      <p>启动后刷新本页即可。若已启动，请确认端口未被占用（默认 7788，可用 <span class="mono">--port</span> 指定其他端口）。</p>
+    </div>
+  </div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   诗影工坊 · 创作台 V2 —— 与本地流水线服务对接
+   ════════════════════════════════════════════════════════════════ */
+const $ = (s, r = document) => (r || document).querySelector(s);
+const $$ = (s, r = document) => Array.from((r || document).querySelectorAll(s));
+
+const STAGES = [
+  { id: "text", num: "1" },
+  { id: "scenes", num: "2" },
+  { id: "images", num: "3" },
+  { id: "voice", num: "4" },
+  { id: "compose", num: "5" },
+];
+
+const state = {
+  cfg: null,
+  jobId: null,
+  job: null,
+  pollTimer: 0,
+  analysis: null,
+  manifest: null,
+  selectedPoemId: null,
+  busy: false,
+  dirtyAnalysis: false,
+  dirtyOptions: false,
+  options: { voice: "qingzheng", bgm: "guqin", narration: "both" },
+  sceneIdx: 0,
+  jobMode: null,
+  phase: "idle", // idle | analyzing | review | rendering | done
+  lastRender: null,
+};
+
+/* ── 基础工具 ──────────────────────────────────────────────────── */
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+function fmtTime(ms) {
+  ms = Math.max(0, Math.round(ms)); const s = Math.floor(ms / 1000);
+  return pad2(Math.floor(s / 60)) + ":" + pad2(s % 60);
+}
+function toast(msg) {
+  const stack = $("#toastStack");
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = '<svg class="t-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17l9-10"/></svg><span></span>';
+  el.querySelector("span").textContent = msg;
+  stack.appendChild(el);
+  while (stack.children.length > 3) stack.removeChild(stack.firstElementChild);
+  const hide = setTimeout(() => el.remove(), 3600);
+  el.addEventListener("mouseenter", () => clearTimeout(hide));
+}
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) throw new Error((await res.text()).slice(0, 200) || res.statusText);
+  return res.json();
+}
+const PENCIL = '<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.8 3.7a2.6 2.6 0 1 1 3.7 3.7L7.2 20.7 3 22l1.3-4.2z"/></svg>';
+const ICON_PLAY = '<path d="M9 6.2v11.6l9.2-5.8z"/>';
+const ICON_PAUSE = '<rect x="8.1" y="6.4" width="2.9" height="11.2" rx="1.1"/><rect x="13" y="6.4" width="2.9" height="11.2" rx="1.1"/>';
+
+/* ── 初始化 ───────────────────────────────────────────────────── */
+async function init() {
+  try {
+    state.cfg = await api("/api/config");
+  } catch (e) {
+    $("#connOverlay").classList.remove("hidden");
+    return;
+  }
+  $("#connChip").setAttribute("data-ok", "1");
+  $("#connText").textContent = "本地服务已连接";
+  const d = state.cfg.defaults || {};
+  state.options.voice = d.voice || "qingzheng";
+  state.options.bgm = d.bgm || "guqin";
+  state.options.narration = d.narration || "both";
+  $("#libMeta").textContent = "内置 " + state.cfg.poems.length + " 首";
+  $("#stageMeta").textContent = "竖屏 9:16 · " + (state.cfg.providers.image === "svg" ? "本地渲染" : "AI 出图");
+  renderLibrary();
+  renderVoiceChips();
+  renderBgmChips();
+  bindEvents();
+  loadWorks();
+  // ?job=<id> 直达某次任务（刷新后继续看结果 / 外部链接唤起）
+  const urlJob = new URLSearchParams(location.search).get("job");
+  if (urlJob) {
+    state.jobId = urlJob;
+    state.busy = true;
+    showGenOverlay();
+    $("#stageEmpty").classList.add("hidden");
+    startPolling();
+  }
+  window.addEventListener("beforeunload", () => { if (state.jobId) clearInterval(state.pollTimer); });
+}
+
+function renderLibrary() {
+  const list = $("#libList");
+  list.innerHTML = state.cfg.poems.map((p) => (
+    '<li><button class="lib-item" type="button" data-poem="' + p.id + '">' +
+    '<span class="lib-main"><span class="lib-title">' + esc(p.title) + ' <span class="lib-dyn">' + esc(p.dynasty) + " · " + esc(p.author) + "</span></span>" +
+    '<span class="lib-snippet">' + esc(p.lines.join("，")) + "。</span></span>" +
+    '<span class="lib-tag">已收录</span></button></li>'
+  )).join("");
+}
+function esc(s) { return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+function renderVoiceChips() {
+  const row = $("#voiceRow");
+  const items = state.cfg.voiceProfiles.map((v) => ({ id: v.id, label: v.label }));
+  items.push({ id: "none", label: "无配音" });
+  row.innerHTML = items.map((v) =>
+    '<button class="chip-opt" type="button" data-voice="' + v.id + '" aria-pressed="' + (state.options.voice === v.id) + '">' + esc(v.label) + "</button>"
+  ).join("");
+  const videoVoice = (state.cfg.providers.voice === "none") ? "none" : null;
+  if (videoVoice) row.querySelector('[data-voice="none"]').setAttribute("aria-pressed", "true");
+  // 音色映射透明化（防止“换了档位却听不出区别”的困惑）
+  const note = $("#voiceMapNote");
+  if (note) {
+    if (videoVoice) {
+      note.textContent = "没有可用的配音通道：可在 .env 改配 edge / openai tts，或选「无配音」。";
+    } else {
+      const parts = state.cfg.voiceProfiles.map((p) => {
+        const base = p.label.split("·")[0].trim();
+        if (!p.actual) return base + " = 系统默认";
+        const suffix = p.note || (p.shaped ? "音高塑形" : "原声");
+        return base + " = " + shortVoiceName(p.actual) + "（" + suffix + "）";
+      });
+      note.textContent = "音色映射：" + parts.join("；");
+    }
+  }
+}
+function renderBgmChips() {
+  const row = $("#bgmRow");
+  const opts = state.cfg.bgmOptions.some((b) => b.id === state.options.bgm) ? state.cfg.bgmOptions : state.cfg.bgmOptions.concat([{ id: state.options.bgm, label: state.options.bgm }]);
+  row.innerHTML = opts.map((b) =>
+    '<button class="chip-opt" type="button" data-bgm="' + b.id + '" aria-pressed="' + (state.options.bgm === b.id) + '">' + esc(b.label) + "</button>"
+  ).join("");
+}
+
+/* ── 作品库（磁盘历史任务） ─────────────────────────────────── */
+async function loadWorks() {
+  try {
+    const r = await api("/api/works");
+    const list = $("#worksList");
+    if (!r.works.length) {
+      list.innerHTML = '<li class="empty-state" style="padding:12px 4px;"><span class="empty-text">还没有成品：选择一首诗，生成第一支成片。</span></li>';
+      return;
+    }
+    list.innerHTML = r.works.map((w) => (
+      '<li><button class="lib-item" type="button" data-work="' + w.id + '">' +
+      '<span class="lib-main"><span class="lib-title">' + esc(w.title) + ' <span class="lib-dyn">' + esc(w.dynasty) + " · " + esc(w.author) + "</span></span>" +
+      '<span class="lib-snippet">' + Math.round((w.totalMs || 0) / 1000) + " 秒 · " + esc(w.image || "") + " 画面 · " + esc(String(w.createdAt || "").slice(0, 16).replace("T", " ")) + "</span></span>" +
+      '<span class="lib-tag">成品</span></button></li>'
+    )).join("");
+  } catch (e) {
+    /* 服务未就绪时忽略 */
+  }
+}
+function loadJob(id) {
+  state.jobId = id;
+  state.busy = true;
+  showGenOverlay();
+  $("#stageEmpty").classList.add("hidden");
+  startPolling();
+}
+
+/* ── 生成流程 ─────────────────────────────────────────────────── */
+function currentPoemText() { return $("#poemInput").value.trim(); }
+
+async function startJob(body) {
+  if (state.busy) return;
+  hidePoemError();
+  state.busy = true;
+  state.jobMode = body.mode;
+  state.phase = body.mode === "analyze" ? "analyzing" : "rendering";
+  setBusyUi(true);
+  resetStageForRun(body.mode);
+  try {
+    const r = await api("/api/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    state.jobId = r.jobId;
+    state.job = null;
+    startPolling();
+  } catch (e) {
+    state.busy = false;
+    state.phase = "idle";
+    setBusyUi(false);
+    toast("任务创建失败：" + e.message);
+  }
+}
+
+/** 第一步：生成解析与文案（不直接开始生图/配音） */
+function analyzePoem(opts) {
+  opts = opts || {};
+  const text = opts.text !== undefined ? opts.text : currentPoemText();
+  const poemId = opts.poemId !== undefined ? opts.poemId : null;
+  if (!poemId && !text) { showPoemError("请先输入诗词，或从下方诗词库选择一首。"); return; }
+  startJob({ mode: "analyze", poemId: poemId || undefined, text: poemId ? undefined : text });
+}
+
+/** 复用判定：同一首诗且已有成片时，复用其画面 */
+function reuseCandidate() {
+  const lr = state.lastRender;
+  if (!lr || !state.analysis) return undefined;
+  const sameTitle = lr.title === state.analysis.title;
+  const sameLines = lr.lines === state.analysis.lines.join("");
+  return sameTitle && sameLines ? lr.jobId : undefined;
+}
+
+/** 第二步：确认后生成成片（意境图 → 配音 → 字幕合成） */
+function renderFilm() {
+  if (!state.analysis) { toast("请先生成解析与文案"); return; }
+  const fresh = $("#chkFreshImages") && $("#chkFreshImages").checked;
+  startJob({
+    mode: "render",
+    analysis: state.analysis,
+    options: {
+      voice: state.options.voice,
+      bgm: state.options.bgm,
+      narration: state.options.narration,
+      reuseFrom: fresh ? undefined : reuseCandidate(),
+      freshImages: fresh || undefined,
+    },
+  });
+}
+
+function startPolling() {
+  clearInterval(state.pollTimer);
+  pollJob();
+  state.pollTimer = setInterval(pollJob, 1200);
+}
+async function pollJob() {
+  if (!state.jobId) return;
+  let job;
+  try {
+    job = await api("/api/jobs/" + state.jobId);
+  } catch (e) {
+    return; // 网络抖动，下轮再试
+  }
+  state.job = job;
+  renderPipeline(job);
+  if (job.status === "done") {
+    clearInterval(state.pollTimer);
+    onJobDone(job);
+  } else if (job.status === "error") {
+    clearInterval(state.pollTimer);
+    onJobError(job);
+  }
+}
+
+/* ── 流程条渲染 ───────────────────────────────────────────────── */
+function renderPipeline(job) {
+  const stageState = {};
+  const stageSub = {};
+  for (const ev of job.events || []) {
+    if (ev.type !== "stage" || !ev.stage) continue;
+    if (ev.status === "start") stageState[ev.stage] = "running";
+    if (ev.status === "progress") { stageState[ev.stage] = stageState[ev.stage] || "running"; }
+    if (ev.status === "done" || ev.status === "skip") stageState[ev.stage] = "done";
+    if (ev.message) stageSub[ev.stage] = ev.message;
+  }
+  if (job.stage && !stageState[job.stage]) stageState[job.stage] = "running";
+  STAGES.forEach((s) => {
+    const el = $('#pipelineTrack .pc[data-stage="' + s.id + '"]');
+    if (!el) return;
+    el.setAttribute("data-state", stageState[s.id] || "pending");
+    const sub = stageSub[s.id];
+    if (sub) el.querySelector("[data-sub]").textContent = sub.replace(/^[^：]*：/, "").slice(0, 24);
+  });
+  const analyzing = job.mode === "analyze";
+  const analyzeDone = analyzing && job.status === "done";
+  const pct = Math.round((job.overall || 0) * 100);
+  $("#overallFill").style.width = (analyzeDone ? 9 : pct) + "%";
+  $("#overallNum").textContent = analyzeDone ? "待确认" : pct + "%";
+  $("#pipelineStatus").textContent = job.message || "";
+  const overlay = $("#genOverlay");
+  if (!overlay.classList.contains("hidden")) {
+    const norm = analyzing ? Math.min(1, (job.overall || 0) / 0.09) : (job.overall || 0);
+    const normPct = Math.round(norm * 100);
+    $("#genRing").style.setProperty("--p", String(normPct));
+    $("#genPercent").textContent = normPct + "%";
+    $("#genStatus").textContent = job.message || "生成中…";
+  }
+  // 项目芯片
+  const chip = $("#projectChip");
+  if (job.analysis) chip.setAttribute("data-state", job.status === "done" && !analyzing ? "ready" : "busy");
+}
+
+function setProjectChip(title, sub, st) {
+  const chip = $("#projectChip");
+  chip.setAttribute("data-state", st || "empty");
+  $("#projectChipName").textContent = title ? "《" + title + "》· " + (sub || "") : "未命名作品";
+}
+
+/* ── 生成完成 ─────────────────────────────────────────────────── */
+function onJobDone(job) {
+  state.busy = false;
+  setBusyUi(false);
+  const isAnalyze = job.mode === "analyze" && !job.manifest;
+  state.analysis = job.analysis;
+  if (!isAnalyze) state.manifest = job.manifest;
+  state.dirtyAnalysis = false;
+  state.dirtyOptions = false;
+  const a = state.analysis;
+  if (a) {
+    setProjectChip(a.title, a.dynasty + " · " + a.author, isAnalyze ? "busy" : "ready");
+    $("#analysisMeta").textContent = "《" + a.title + "》· " + a.dynasty + " · " + a.author;
+    $("#poemInput").value = a.lines.join("，") + "。";
+    $$("#libList [data-poem]").forEach((b) => b.setAttribute("aria-current", String(b.getAttribute("data-poem") === a.id)));
+  }
+  hideGenOverlay();
+  renderAnalysis();
+  if (isAnalyze) {
+    // 审核阶段：不生成成片，等待用户确认
+    state.phase = "review";
+    $("#stageEmpty").classList.remove("hidden");
+    $("#stageEmpty .se-title").textContent = "解析与文案已就绪";
+    $("#stageEmpty .se-text").textContent = "审核修改后，在右侧点「开始生成成片」。";
+    $("#reviewBlock").classList.remove("hidden");
+    updateReviewMeta();
+    updateRerunButton();
+    loadWorks();
+    toast("解析与文案已就绪 · 请审核后确认生成");
+    return;
+  }
+  // 成片完成
+  state.phase = "done";
+  state.lastRender = a ? { jobId: state.jobId, title: a.title, lines: a.lines.join("") } : null;
+  const fr = $("#chkFreshImages");
+  if (fr) fr.checked = false;
+  $("#stageEmpty").classList.add("hidden");
+  $("#reviewBlock").classList.add("hidden");
+  renderVideo(job);
+  renderStoryboard(job);
+  renderExport(job);
+  updateRerunButton();
+  loadWorks();
+  toast("成片已就绪（" + Math.round((job.manifest ? job.manifest.totalMs : 0) / 1000) + " 秒）");
+}
+
+function onJobError(job) {
+  state.busy = false;
+  setBusyUi(false);
+  hideGenOverlay();
+  $("#stageEmpty").classList.remove("hidden");
+  $("#pipelineStatus").textContent = "失败：" + (job.error || "未知错误");
+  toast("生成失败：" + (job.error || "").slice(0, 120));
+}
+
+function resetStageForRun(mode) {
+  const analyzing = mode === "analyze";
+  $("#pipelineStatus").textContent = analyzing ? "正在准备解析与文案…" : "正在生成成片…";
+  $("#overallFill").style.width = "0%";
+  $("#overallNum").textContent = "0%";
+  STAGES.forEach((s) => {
+    const el = $('#pipelineTrack .pc[data-stage="' + s.id + '"]');
+    if (el) el.setAttribute("data-state", "pending");
+  });
+  $("#reviewBlock").classList.add("hidden");
+  $("#stageEmpty").classList.add("hidden");
+  showGenOverlay();
+  $("#genStatus").textContent = analyzing ? "正在准备解析与文案…" : "正在生成成片：意境图 → 配音 → 合成…";
+  if (analyzing) {
+    // 换诗重新分析：中栏骨架化 + 清空旧成片
+    skeletonGloss(); skeletonNotes(); skeletonScript();
+    $("#tipsBox").innerHTML = "";
+    $("#glossNote").textContent = "生成中…";
+    $("#notesNote").textContent = "生成中…";
+    $("#scriptNote").textContent = "生成中…";
+    clearMedia();
+  }
+}
+
+/** 清空成片区（换诗/重新分析时） */
+function clearMedia() {
+  const video = $("#phoneVideo");
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+  state.manifest = null;
+  $("#sbStrip").innerHTML = "";
+  $("#sbMeta").textContent = "等待生成";
+  $("#sceneIdx").textContent = "00 / 00";
+  $("#timeCode").textContent = "00:00 / 00:00";
+  $("#phoneProgress").style.width = "0%";
+  [video, $("#btnSrt")].forEach((a) => { if (a.tagName === "A") { a.style.pointerEvents = "none"; a.style.opacity = "0.45"; a.href = "#"; } });
+  ["#btnPlay", "#btnPrev", "#btnNext", "#btnOpenVideo", "#btnCopyScript"].forEach((s) => ($(s).disabled = true));
+  $("#exportNote").textContent = "成片、字幕、文案均由本地流水线真实产出。";
+}
+function showGenOverlay() { $("#genOverlay").classList.remove("hidden"); }
+function hideGenOverlay() { $("#genOverlay").classList.add("hidden"); }
+function setBusyUi(b) {
+  $("#btnGenerate").disabled = b;
+  $("#btnRerun").disabled = b || !canRerun();
+  const confirm = $("#btnConfirmRender");
+  if (confirm) confirm.disabled = b;
+  $$("#libList [data-poem]").forEach((el) => (el.disabled = b));
+}
+function canRerun() {
+  const fresh = $("#chkFreshImages") && $("#chkFreshImages").checked;
+  return !!state.analysis && (state.dirtyAnalysis || state.dirtyOptions || (fresh && state.phase === "done"));
+}
+function updateRerunButton() {
+  const btn = $("#btnRerun");
+  const freshOpt = $("#freshOpt");
+  if (freshOpt) freshOpt.classList.toggle("hidden", state.phase !== "done");
+  const fresh = $("#chkFreshImages") && $("#chkFreshImages").checked;
+  if (state.phase === "review") {
+    btn.disabled = true;
+    $("#rerunHint").textContent = "审核修改与音色配乐后，在右侧点「开始生成成片」。";
+    return;
+  }
+  btn.disabled = state.busy || !canRerun();
+  $("#rerunHint").textContent = !state.analysis
+    ? "生成成片后可在此应用修改。"
+    : fresh && state.phase === "done"
+      ? "将重新生成全部意境图（忽略缓存），并重做声音与合成。"
+      : canRerun()
+        ? "有未应用的修改：重新合成默认复用已出画面，只重做声音与合成。"
+        : "修改释义或音色后，点这里重新合成；要让画面跟上新释义，勾选「重新生成意境图」。";
+}
+
+/** 音色/配乐变更后的统一处理（审核期生效于确认，成片后触发重新合成提示） */
+function soundOptionChanged(kind, label) {
+  state.dirtyOptions = true;
+  updateReviewMeta();
+  if (state.phase === "review") {
+    toast(kind + "已选：" + label + " · 确认生成时生效");
+    return;
+  }
+  updateRerunButton();
+  toast(kind + "已选：" + label + (state.phase === "done" ? " · 点「重新合成」生效" : ""));
+}
+
+/** 审核块摘要（画面 / 音色 / 配乐） */
+function updateReviewMeta() {
+  if (!state.cfg) return;
+  const vp = state.cfg.voiceProfiles.find((p) => p.id === state.options.voice);
+  const voiceLabel =
+    state.options.voice === "none"
+      ? "无配音"
+      : vp
+        ? vp.label + (vp.shaped && vp.actual ? "（" + shortVoiceName(vp.actual) + " 塑形）" : "")
+        : state.options.voice;
+  const b = state.cfg.bgmOptions.find((x) => x.id === state.options.bgm);
+  $("#reviewMeta").textContent = "画面：" + state.cfg.providers.image + " · 音色：" + voiceLabel + " · 配乐：" + (b ? b.label : state.options.bgm);
+}
+
+function shortVoiceName(name) {
+  return String(name).replace(/^Microsoft\s*/i, "").replace(/\s*Desktop$/i, "");
+}
+
+/* ── 中栏渲染 ─────────────────────────────────────────────────── */
+function skeletonGloss() {
+  $("#glossList").innerHTML = '<li class="gloss-item"><div style="grid-column:1/-1;"><div class="sk sk-line w-40" style="height:18px;"></div><div class="sk sk-line w-90"></div></div></li>'.repeat(3);
+}
+function skeletonNotes() {
+  const card = '<div class="note-card"><div class="sk sk-line w-40"></div><div class="sk sk-line w-90"></div><div class="sk sk-line w-75"></div></div>';
+  $("#notesGrid").innerHTML = card + card + card;
+}
+function skeletonScript() {
+  const pnEl = $("#personaNote");
+  if (pnEl) pnEl.classList.add("hidden");
+  $("#scriptBody").innerHTML = '<div class="sc-block"><span class="sc-lab">开场</span><div><div class="sk sk-line w-90"></div></div></div><div class="sc-block"><span class="sc-lab">旁白</span><div><div class="sk sk-line w-90"></div></div></div>';
+}
+
+function renderAnalysis() {
+  const a = state.analysis;
+  if (!a) return;
+  // 提示（降级信息）
+  const tips = (a.origin && a.origin.tips) || [];
+  $("#tipsBox").innerHTML = tips.length
+    ? '<div class="notice"><span class="n-title">提示</span>' + tips.map(esc).join("<br/>") + "</div>"
+    : "";
+  // 逐句释义
+  $("#glossNote").textContent = a.lines.length + " 句 · " + (a.gloss.some(Boolean) ? "现代汉语" : "待补全");
+  $("#glossList").innerHTML = a.lines.map((line, i) => (
+    '<li class="gloss-item reveal" style="animation-delay:' + i * 90 + 'ms">' +
+    '<span class="gloss-index">' + pad2(i + 1) + "</span>" +
+    '<div><div class="gloss-line">' + esc(line) + "</div>" +
+    '<div class="gloss-text" data-edit-id="gloss-' + i + '">' + esc(a.gloss[i] || "（未生成释义）") + "</div></div>" +
+    '<button class="icon-btn edit-btn" type="button" data-edit="gloss-' + i + '" aria-pressed="false" aria-label="编辑第 ' + (i + 1) + " 句释义\">" + PENCIL + "</button></li>"
+  )).join("");
+  // 背景
+  const NOTE_ICONS = {
+    life: '<svg class="nc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 19c1.6-2.6 4-3.9 7-3.9s5.4 1.3 7 3.9"/></svg>',
+    context: '<svg class="nc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4.5 19h15"/><path d="M7 19V9.5L12 5.5l5 4V19"/><path d="M10.2 19v-4.6h3.6V19"/></svg>',
+    motif: '<svg class="nc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M19.6 13.4A7.6 7.6 0 1 1 10.6 4.4a6.1 6.1 0 0 0 9 9z"/></svg>',
+  };
+  $("#notesNote").textContent = a.notes.length ? "生平 · 背景 · 典故" : "暂无（接入大模型后生成）";
+  $("#notesGrid").innerHTML = a.notes.length
+    ? a.notes.map((n, i) => (
+      '<div class="note-card' + (n.span ? " span-2" : "") + ' reveal" style="animation-delay:' + i * 110 + 'ms">' +
+      '<div class="nc-head">' + (NOTE_ICONS[n.key] || "") + '<span class="nc-label">' + esc(n.label) + '</span><span class="nc-title">' + esc(n.title) + "</span></div>" +
+      '<p class="nc-text">' + esc(n.text) + "</p></div>"
+    )).join("")
+    : '<div class="empty-state" style="grid-column:1/-1;padding:16px;"><span class="empty-text">接入大模型（SHIYING_TEXT_PROVIDER=glm 等）后，作者生平、创作背景与典故会出现在这里。</span></div>';
+  // 文案
+  const s = a.script;
+  $("#scriptNote").textContent = s ? "逐句旁白＝逐句释义 · 开场/收尾为故事文案" : "纯朗诵版（无脚本）";
+  if (s) {
+    let html = '<div class="script-meta-row"><span class="script-name">' + esc(s.name) + "</span>" +
+      '<span class="mono" style="font-size:12px;color:var(--muted);">' + scriptCharCount() + " 字 · 与分镜同步</span></div>";
+    html += scBlock("开场", "", s.hook, "hook", 0);
+    a.lines.forEach((line, i) => {
+      const nar = (((a.gloss && a.gloss[i]) || "").trim()) || (s.beats[i] || "");
+      html += scBlock("旁白 " + (i + 1), line, nar, "nar" + i, (i + 1) * 90);
+    });
+    html += scBlock("收尾", "", s.outro, "outro", (a.lines.length + 1) * 90);
+    html += '<div class="script-seal" aria-hidden="true"><span class="seal-mark"><span>诗</span><span>影</span></span></div>';
+    $("#scriptBody").innerHTML = html;
+  } else {
+    $("#scriptBody").innerHTML = '<div class="empty-state" style="padding:16px;"><span class="empty-text">离线模式未生成故事文案；接入大模型后这里会出现开场、逐句旁白与收尾，可逐段编辑。</span></div>';
+  }
+  // 人物一致性（跨镜固定形象；样式描述可点击修改）
+  const per = a.persona;
+  const perEl = $("#personaNote");
+  if (perEl) {
+    if (per && per.consistent) {
+      const srcLabel = per.basis === "curated" ? "内置设定" : per.basis === "llm" ? "大模型判定" : per.basis === "manual" ? "手动修改" : "自动推断";
+      perEl.classList.remove("hidden");
+      perEl.innerHTML =
+        '<div class="sc-block persona-block"><span class="sc-lab">人物</span><div>' +
+        '<div class="sc-cue">' + esc(per.who) + " · 全片同一形象（" + srcLabel + "）</div>" +
+        '<div class="sc-text" data-edit-id="persona-look">' + esc(per.look) + "</div></div>" +
+        '<button class="icon-btn edit-btn" type="button" data-edit="persona-look" aria-pressed="false" aria-label="编辑人物形象描述">' + PENCIL + "</button></div>";
+    } else {
+      perEl.classList.remove("hidden");
+      perEl.innerHTML = '<div class="persona-off">人物一致性：未启用——未识别到跨句统一的人物（多人物或纯写景时不做形象约束）。</div>';
+    }
+  }
+  updateRerunButton();
+}
+function scBlock(lab, cue, text, id, delay) {
+  return '<div class="sc-block reveal" style="animation-delay:' + delay + 'ms">' +
+    '<span class="sc-lab">' + esc(lab) + "</span>" +
+    "<div>" + (cue ? '<div class="sc-cue">' + esc(cue) + "</div>" : "") +
+    '<div class="sc-text" data-edit-id="script-' + id + '">' + esc(text) + "</div></div>" +
+    '<button class="icon-btn edit-btn" type="button" data-edit="script-' + id + '" aria-pressed="false" aria-label="编辑文案">' + PENCIL + "</button></div>";
+}
+function scriptCharCount() {
+  const a = state.analysis;
+  const s = a && a.script;
+  if (!s) return 0;
+  const mid = a.gloss && a.gloss.length ? a.gloss.join("") : s.beats.join("");
+  const t = s.hook + mid + s.outro;
+  return t.replace(/[，。、；：「」——…·\s]/g, "").length;
+}
+
+/* ── 行内编辑 ─────────────────────────────────────────────────── */
+function toggleEdit(btn) {
+  const id = btn.getAttribute("data-edit");
+  const el = document.querySelector('[data-edit-id="' + id + '"]');
+  if (!el) return;
+  if (el.getAttribute("contenteditable") === "true") { commitEdit(el); return; }
+  el.setAttribute("contenteditable", "true");
+  el.focus();
+  try {
+    const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  } catch (e) {}
+  btn.setAttribute("aria-pressed", "true");
+}
+function commitEdit(el) {
+  el.setAttribute("contenteditable", "false");
+  const id = el.getAttribute("data-edit-id");
+  const btn = document.querySelector('[data-edit="' + id + '"]');
+  if (btn) btn.setAttribute("aria-pressed", "false");
+  const text = el.textContent.replace(/\s+/g, " ").trim();
+  if (!text || !state.analysis) { renderAnalysis(); return; }
+  el.textContent = text;
+  if (id.indexOf("gloss-") === 0) {
+    const gi = Number(id.split("-")[1]);
+    state.analysis.gloss[gi] = text;
+    $("#glossEditedBadge").classList.remove("hidden");
+    const nel = document.querySelector('[data-edit-id="nar' + gi + '"]');
+    if (nel) nel.textContent = text; // 与文案区旁白同步
+  } else if (id.indexOf("nar") === 0) {
+    const gi = Number(id.slice(3));
+    state.analysis.gloss[gi] = text; // 旁白即释义：写回同一来源
+    $("#glossEditedBadge").classList.remove("hidden");
+    const gel = document.querySelector('[data-edit-id="gloss-' + gi + '"]');
+    if (gel) gel.textContent = text;
+  } else if (id === "script-hook") state.analysis.script.hook = text;
+  else if (id === "script-outro") state.analysis.script.outro = text;
+  else if (id.indexOf("script-b") === 0) state.analysis.script.beats[Number(id.split("b")[1])] = text;
+  else if (id === "persona-look") {
+    if (state.analysis.persona) {
+      state.analysis.persona.look = text;
+      state.analysis.persona.basis = "manual";
+    } else {
+      state.analysis.persona = { consistent: true, who: "同一人物", look: text, basis: "manual" };
+    }
+  }
+  state.dirtyAnalysis = true;
+  updateRerunButton();
+  toast("修改已记录 · 点「应用修改并重新合成」生效");
+}
+
+/* ── 视频与分镜 ───────────────────────────────────────────────── */
+function renderVideo(job) {
+  const video = $("#phoneVideo");
+  const jid = state.jobId;
+  if (job.manifest && job.manifest.files) {
+    video.poster = "/media/" + jid + "/" + job.manifest.files.cover;
+    video.src = "/media/" + jid + "/" + job.manifest.files.video;
+    video.load();
+  }
+  ["#btnPlay", "#btnPrev", "#btnNext"].forEach((s) => ($(s).disabled = false));
+}
+function renderStoryboard(job) {
+  const jid = state.jobId;
+  const scenes = (job.manifest && job.manifest.scenes) || [];
+  $("#sbStrip").innerHTML = scenes.map((s, i) => (
+    '<button class="sb-item" type="button" data-scene="' + i + '" aria-current="false" aria-label="跳到分镜 ' + (i + 1) + "：" + esc(s.label) + '">' +
+    '<span class="sb-thumb"><span class="sb-idx">' + pad2(i + 1) + "</span>" +
+    (s.image ? '<img loading="lazy" src="/media/' + jid + "/" + s.image + '" alt="' + esc(s.label) + '"/>' : "") +
+    '</span><span class="sb-label">' + esc(s.label) + "</span></button>"
+  )).join("");
+  $("#sbMeta").textContent = scenes.length + " 个分镜 · 点击跳转";
+  state.sceneIdx = 0;
+}
+function renderExport(job) {
+  const jid = state.jobId;
+  const files = (job.manifest && job.manifest.files) || {};
+  const video = $("#btnVideo"), srt = $("#btnSrt");
+  video.href = "/media/" + jid + "/" + files.video;
+  srt.href = "/media/" + jid + "/" + files.srt;
+  [video, srt].forEach((a) => { a.style.pointerEvents = "auto"; a.style.opacity = "1"; a.setAttribute("aria-disabled", "false"); });
+  $("#btnOpenVideo").disabled = false;
+  $("#btnCopyScript").disabled = false;
+  $("#exportNote").textContent = "共 " + Math.round((job.manifest ? job.manifest.totalMs : 0) / 1000) + " 秒 · " + (job.manifest ? job.manifest.providers.image : "") + " 画面 · " + (job.manifest ? job.manifest.providers.voice : "") + " 配音 · 字幕 .srt 与烧制字幕同源";
+  $("#footNote").textContent = "最近成片：" + jid + " · " + Math.round((job.manifest ? job.manifest.totalMs : 0) / 1000) + " 秒";
+}
+
+function videoTimeUpdate() {
+  const video = $("#phoneVideo");
+  const m = state.manifest;
+  if (!m || !m.scenes.length) return;
+  const t = video.currentTime * 1000;
+  const total = m.totalMs;
+  $("#phoneProgress").style.width = Math.min(100, (t / total) * 100).toFixed(2) + "%";
+  $("#timeCode").textContent = fmtTime(Math.min(t, total)) + " / " + fmtTime(total);
+  let idx = m.scenes.length - 1;
+  for (let i = 0; i < m.scenes.length; i++) {
+    if (t < m.scenes[i].startMs + m.scenes[i].durMs) { idx = i; break; }
+  }
+  if (idx !== state.sceneIdx) {
+    state.sceneIdx = idx;
+    $("#sceneIdx").textContent = pad2(idx + 1) + " / " + pad2(m.scenes.length);
+    $$("#sbStrip .sb-item").forEach((b) => b.setAttribute("aria-current", String(Number(b.getAttribute("data-scene")) === idx)));
+  }
+}
+function seekScene(i) {
+  const m = state.manifest;
+  if (!m || !m.scenes.length) return;
+  i = Math.max(0, Math.min(m.scenes.length - 1, i));
+  const video = $("#phoneVideo");
+  video.currentTime = m.scenes[i].startMs / 1000 + 0.05;
+  state.sceneIdx = i;
+}
+function togglePlay() {
+  const video = $("#phoneVideo");
+  if (!video.src) return;
+  if (video.paused) video.play().catch(() => {}); else video.pause();
+}
+function updatePlayIcon() {
+  const video = $("#phoneVideo");
+  $("#playIcon").innerHTML = video.paused ? ICON_PLAY : ICON_PAUSE;
+  $("#btnPlay").setAttribute("aria-label", video.paused ? "播放" : "暂停");
+}
+
+/* ── 重新合成 ─────────────────────────────────────────────────── */
+function rerun() {
+  if (!state.analysis || state.busy) return;
+  renderFilm();
+}
+
+/* ── 复制文案 ─────────────────────────────────────────────────── */
+function buildScriptText() {
+  const a = state.analysis;
+  if (!a) return "";
+  let out = "《" + a.title + "》· " + a.dynasty + " · " + a.author + " · 短视频文案\n";
+  if (a.script) {
+    out += a.script.name + "\n\n【开场】\n" + a.script.hook + "\n";
+    a.lines.forEach((line, i) => {
+      const nar = (((a.gloss && a.gloss[i]) || "").trim()) || (a.script.beats[i] || "");
+      out += "\n【" + line + "】\n" + nar + "\n";
+    });
+    out += "\n【收尾】\n" + a.script.outro + "\n";
+  } else {
+    out += "\n【朗诵版】\n" + a.lines.join("，") + "。\n";
+  }
+  return out;
+}
+function copyText(text, okMsg) {
+  const done = () => toast(okMsg || "已复制到剪贴板");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => toast("复制失败，请手动选择文本"));
+  } else toast("复制失败，请手动选择文本");
+}
+
+/* ── 表单与事件 ───────────────────────────────────────────────── */
+function showPoemError(msg) {
+  $("#poemErrorText").textContent = msg;
+  $("#poemError").classList.remove("hidden");
+  $("#poemInput").setAttribute("aria-invalid", "true");
+  $("#poemInput").focus();
+}
+function hidePoemError() {
+  $("#poemError").classList.add("hidden");
+  $("#poemInput").removeAttribute("aria-invalid");
+}
+function newProject() {
+  state.jobId = null; state.job = null; state.analysis = null; state.manifest = null;
+  state.jobMode = null; state.phase = "idle"; state.lastRender = null;
+  const fr = $("#chkFreshImages");
+  if (fr) fr.checked = false;
+  state.dirtyAnalysis = false; state.dirtyOptions = false;
+  clearInterval(state.pollTimer);
+  setBusyUi(false);
+  $("#reviewBlock").classList.add("hidden");
+  $("#stageEmpty .se-title").textContent = "等待生成";
+  $("#stageEmpty .se-text").textContent = "选择或输入一首诗词，先生成解析与文案，确认后成片会在这里播放。";
+  setProjectChip(null, null, "empty");
+  $("#analysisMeta").textContent = "未选择诗词";
+  $("#poemInput").value = "";
+  hidePoemError();
+  $$("#libList [data-poem]").forEach((b) => b.removeAttribute("aria-current"));
+  STAGES.forEach((s) => { const el = $('#pipelineTrack .pc[data-stage="' + s.id + '"]'); if (el) el.setAttribute("data-state", "pending"); });
+  $("#pipelineStatus").textContent = "等待开始";
+  $("#overallFill").style.width = "0%"; $("#overallNum").textContent = "0%";
+  $("#tipsBox").innerHTML = "";
+  $("#glossList").innerHTML = '<li class="empty-state"><span class="empty-title">还没有解析结果</span><span class="empty-text">输入或选择一首诗词，点击「识别并生成」，逐句释义会出现在这里。</span></li>';
+  $("#notesGrid").innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:18px;"><span class="empty-text">作者生平、创作背景与典故，会在生成后出现在这里。</span></div>';
+  $("#scriptBody").innerHTML = '<div class="empty-state" style="padding:16px;"><span class="empty-text">故事化短视频文案会在这里生成，生成后可直接点击修改。</span></div>';
+  const pnReset = $("#personaNote");
+  if (pnReset) pnReset.classList.add("hidden");
+  $("#glossNote").textContent = "等待生成"; $("#notesNote").textContent = "等待生成"; $("#scriptNote").textContent = "等待生成";
+  const video = $("#phoneVideo"); video.pause(); video.removeAttribute("src"); video.load();
+  $("#stageEmpty").classList.remove("hidden");
+  $("#genOverlay").classList.add("hidden");
+  $("#sbStrip").innerHTML = ""; $("#sbMeta").textContent = "等待生成";
+  $("#sceneIdx").textContent = "00 / 00"; $("#timeCode").textContent = "00:00 / 00:00";
+  $("#phoneProgress").style.width = "0%";
+  [video, $("#btnSrt")].forEach((a) => { if (a.tagName === "A") { a.style.pointerEvents = "none"; a.style.opacity = "0.45"; a.href = "#"; } });
+  ["#btnPlay", "#btnPrev", "#btnNext", "#btnOpenVideo", "#btnCopyScript"].forEach((s) => ($(s).disabled = true));
+  updateRerunButton();
+}
+
+function bindEvents() {
+  $("#poemInput").addEventListener("input", hidePoemError);
+  $("#btnGenerate").addEventListener("click", () => analyzePoem({}));
+  $("#btnClear").addEventListener("click", () => { $("#poemInput").value = ""; hidePoemError(); $("#poemInput").focus(); });
+  $("#btnNew").addEventListener("click", newProject);
+  $("#btnRerun").addEventListener("click", rerun);
+  $("#btnConfirmRender").addEventListener("click", renderFilm);
+  $("#chkFreshImages").addEventListener("change", updateRerunButton);
+
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    const editBtn = t.closest("[data-edit]");
+    if (editBtn) { toggleEdit(editBtn); return; }
+    const work = t.closest("#worksList [data-work]");
+    if (work) { loadJob(work.getAttribute("data-work")); return; }
+    const lib = t.closest("#libList [data-poem]");
+    if (lib && !lib.disabled) {
+      const id = lib.getAttribute("data-poem");
+      const p = state.cfg.poems.find((x) => x.id === id);
+      if (p) { $("#poemInput").value = p.lines.join("，") + "。"; }
+      state.selectedPoemId = id;
+      $$("#libList [data-poem]").forEach((b) => b.setAttribute("aria-current", String(b.getAttribute("data-poem") === id)));
+      state.dirtyAnalysis = false; state.dirtyOptions = false;
+      analyzePoem({ poemId: id });
+      return;
+    }
+    const voice = t.closest("#voiceRow [data-voice]");
+    if (voice) {
+      const v = voice.getAttribute("data-voice");
+      if (v === state.options.voice) return;
+      state.options.voice = v;
+      $$("#voiceRow [data-voice]").forEach((b) => b.setAttribute("aria-pressed", String(b.getAttribute("data-voice") === v)));
+      soundOptionChanged("音色", voice.textContent.trim());
+      return;
+    }
+    const bgm = t.closest("#bgmRow [data-bgm]");
+    if (bgm) {
+      const b = bgm.getAttribute("data-bgm");
+      if (b === state.options.bgm) return;
+      state.options.bgm = b;
+      $$("#bgmRow [data-bgm]").forEach((x) => x.setAttribute("aria-pressed", String(x.getAttribute("data-bgm") === b)));
+      soundOptionChanged("配乐", bgm.textContent.trim());
+      return;
+    }
+    const sb = t.closest("#sbStrip [data-scene]");
+    if (sb) { seekScene(Number(sb.getAttribute("data-scene"))); return; }
+  });
+
+  document.addEventListener("focusout", (e) => {
+    const t = e.target;
+    if (t && t.getAttribute && t.getAttribute("contenteditable") === "true") commitEdit(t);
+  });
+
+  // 播放器
+  $("#btnPlay").addEventListener("click", togglePlay);
+  $("#btnPrev").addEventListener("click", () => seekScene(state.sceneIdx - 1));
+  $("#btnNext").addEventListener("click", () => seekScene(state.sceneIdx + 1));
+  $("#phoneScreen").addEventListener("click", (e) => { if (e.target.id !== "phoneVideo") togglePlay(); });
+  const video = $("#phoneVideo");
+  video.addEventListener("timeupdate", videoTimeUpdate);
+  video.addEventListener("loadedmetadata", () => {
+    const m = state.manifest;
+    if (m) $("#timeCode").textContent = "00:00 / " + fmtTime(m.totalMs);
+  });
+  video.addEventListener("play", updatePlayIcon);
+  video.addEventListener("pause", updatePlayIcon);
+  video.addEventListener("ended", updatePlayIcon);
+  video.addEventListener("click", (e) => { e.stopPropagation(); togglePlay(); });
+
+  $("#stageBox").addEventListener("keydown", (e) => {
+    if (e.key === " ") { e.preventDefault(); togglePlay(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); seekScene(state.sceneIdx - 1); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); seekScene(state.sceneIdx + 1); }
+  });
+
+  // 导出
+  $("#btnCopyScript").addEventListener("click", () => {
+    if (!state.analysis) { toast("请先生成一首诗词"); return; }
+    copyText(buildScriptText(), "短视频文案已复制");
+  });
+  $("#btnOpenVideo").addEventListener("click", () => {
+    if (state.jobId && state.manifest) window.open("/media/" + state.jobId + "/" + state.manifest.files.video, "_blank");
+  });
+
+  // 对话框
+  const dlg = $("#dlgHelp");
+  $("#btnHelp").addEventListener("click", () => dlg.showModal());
+  $("#btnHelpClose").addEventListener("click", () => dlg.close());
+  $("#btnHelpOk").addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $$("dialog[open]").forEach((d) => d.close()); });
+}
+
+init();
+</script>
+</body>
+</html>

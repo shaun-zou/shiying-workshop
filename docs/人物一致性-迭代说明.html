@@ -1,0 +1,169 @@
+<!doctype html>
+<!--
+  诗影工坊 · 工坊手记 · 增补页 03 —— 人物一致性：让每句意境图里的人物始终如一（单文件 Native HTML）
+  images 相对路径（docs/assets/），双击即开
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>诗影工坊 · 人物一致性</title>
+  <style>
+    :root {
+      --bg: #F7F4EC; --surface: #FEFCF6; --surface-2: #F2EDE0;
+      --ink: #23201A; --body: #3B362D; --muted: #6E6A5C;
+      --rule: #E3DCCB; --rule-strong: #CDC5AF; --accent: #B03A2E;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", "SimSun", Georgia, serif;
+      --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+      --measure: 46rem;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--body); font-family: var(--sans); font-size: 15.5px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+    h1, h2, h3 { margin: 0; color: var(--ink); font-weight: 600; text-wrap: balance; }
+    p { margin: 0 0 1em; }
+    a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+    .canvas { max-width: 860px; margin-inline: auto; padding: clamp(40px, 6vw, 88px) clamp(22px, 5vw, 56px) 72px; }
+
+    .cover { padding-bottom: 40px; border-bottom: 1px solid var(--rule-strong); }
+    .cover-kicker { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted); margin-bottom: 26px; }
+    .seal-sm { width: 22px; height: 22px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--surface); font-family: var(--serif); font-size: 13px; line-height: 1; border-radius: 4px; }
+    .cover h1 { font-family: var(--serif); font-size: clamp(32px, 5vw, 50px); line-height: 1.14; letter-spacing: -0.02em; }
+    .cover-sub { margin-top: 14px; font-size: 16.5px; max-width: 40rem; }
+    .cover-meta { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+
+    .section { border-bottom: 1px solid var(--rule-strong); padding: 44px 0 38px; }
+    .section:last-of-type { border-bottom: 0; }
+    .folio { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 22px; }
+    .folio .no { color: var(--ink); font-weight: 500; }
+    .section h2 { font-family: var(--serif); font-size: clamp(23px, 3vw, 29px); line-height: 1.3; margin-bottom: 16px; letter-spacing: -0.01em; }
+    .prose { max-width: var(--measure); }
+    .prose strong, .points strong { color: var(--ink); font-weight: 500; }
+
+    ul.points { max-width: var(--measure); margin: 18px 0 6px; padding: 0; list-style: none; }
+    .points li { position: relative; padding: 9px 0 9px 21px; border-bottom: 1px dashed var(--rule); font-size: 14.5px; line-height: 1.75; }
+    .points li:last-child { border-bottom: 0; }
+    .points li::before { content: ""; position: absolute; left: 0; top: 1.45em; width: 9px; height: 1px; background: var(--ink); }
+
+    .note { border: 1px solid var(--rule-strong); border-radius: 2px; background: color-mix(in oklab, var(--surface) 64%, var(--bg)); padding: 14px 18px; margin: 20px 0; max-width: var(--measure); }
+    .note .note-label { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 6px; }
+    .note p { margin: 0; font-size: 14px; }
+    .note p.mono { font-family: var(--mono); font-size: 12.5px; line-height: 1.85; }
+
+    figure.fig { margin: 26px 0 10px; }
+    figure.fig img { display: block; width: 100%; height: auto; border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--surface); }
+    figure.fig figcaption { margin-top: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--muted); line-height: 1.8; }
+
+    .bleed { max-width: none; margin: 20px 0 8px; overflow-x: auto; }
+    table.tbl { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 520px; }
+    .tbl th { text-align: left; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.1em; color: var(--muted); padding: 0 18px 10px 0; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+    .tbl td { vertical-align: top; padding: 12px 18px 12px 0; border-bottom: 1px solid var(--rule); line-height: 1.7; }
+    .tbl tr:last-child td { border-bottom: 0; }
+    .tbl td:first-child { color: var(--ink); font-weight: 500; white-space: nowrap; padding-right: 24px; }
+    .tbl td:last-child { color: var(--muted); font-size: 13.5px; padding-right: 0; }
+
+    .colophon { padding: 40px 0 20px; }
+    .closing { font-family: var(--serif); font-size: 19px; line-height: 1.75; color: var(--ink); max-width: 34rem; margin: 0 0 18px; }
+    .colophon-meta { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+    code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-2); border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+    <header class="cover">
+      <div class="cover-kicker"><span class="seal-sm" aria-hidden="true">坊</span>诗影工坊 · 工坊手记 · 增补页 03</div>
+      <h1>同一位诗人：让每句意境图里的人物始终如一</h1>
+      <p class="cover-sub">情景判定「诗句人物是否为同一人」→ 固定形象注入每一镜提示词 → 出图与成片逐镜核验。以《静夜思》（井栏编辑版）全链路实测。</p>
+      <div class="cover-meta">
+        <span>日期：2026-10-02</span>
+        <span>状态：单测 32/32 · 识图核验 6 镜通过</span>
+        <span>配套：《交付报告》《增补页 02》</span>
+      </div>
+    </header>
+
+    <!-- 01 -->
+    <section class="section">
+      <div class="folio"><span class="no">01 · 问题</span><span>同一支片子，两个「李白」</span></div>
+      <h2>人物会在多镜之间「换人」</h2>
+      <div class="prose">
+        <p>旧版成片里，第 3 句「举头望明月」的人物是<strong>黑袍红领</strong>的青年，第 4 句「低头思故乡」却成了<strong>白袍蓄须</strong>的男子——同一支片子里出现了两个「李白」。逐帧看不觉得，放在一起就出戏。</p>
+      </div>
+      <figure class="fig">
+        <img src="assets/persona-before-2up.png" alt="旧版成片两帧：人物服装与胡须不一致" />
+        <figcaption>旧版两支分镜（第 3 句 / 第 4 句）：服装颜色、领缘、胡须全部对不上——需要一套「人物一致性」机制。</figcaption>
+      </figure>
+    </section>
+
+    <!-- 02 -->
+    <section class="section">
+      <div class="folio"><span class="no">02 · 机制</span><span>先判断，再约束</span></div>
+      <h2>情景判断「是不是同一人」，然后逐镜写死形象</h2>
+      <ul class="points">
+        <li><strong>三级判定</strong> —— ① 内置诗用精修设定（《静夜思》→「作者本人 · 青年李白」，二十六岁客居扬州）；② 自定义诗按关键词推断（抒情主人公 / 农人 / 渔者等单一主体）；③ 接入大模型后，解析阶段直接输出人物判定（结构化 <code>persona</code> 字段已内置）。</li>
+        <li><strong>固定形象注入</strong> —— 判定为同一人时，生成一段带服装颜色、发型、气质的形象描述，<strong>逐字写入每一镜的提示词</strong>，并要求「所有分镜中的面貌、发型、服装必须与此完全一致」。</li>
+        <li><strong>两档出镜策略</strong> —— 涉及人物行为的句子（「举头望明月」「疑是地上霜」）要求<strong>须出现该人物</strong>；写景句（「月落窗前」）则「如出现，必须是该人物」。标题镜与尾声镜同样纳入全局约束。</li>
+        <li><strong>如实标注边界</strong> —— 多人物诗（送别双方）或纯写景诗判定为「不启用」，不做多余约束；判定结果与描述在创作台可见、可改。</li>
+      </ul>
+      <div class="note">
+        <span class="note-label">注入的提示词片段（逐字出现在每一镜）</span>
+        <p class="mono">【人物设定 · 全片同一人】人物为作者本人——青年李白（二十六岁，客居扬州）；固定形象：一位二十六岁的青年诗人：束黑色发髻、不戴冠帽，身着月白色交领右衽长衫，衣领与袖口有暗朱色细滚边，腰束深青布带，面容清瘦、眉目清朗，身姿挺拔。（所有分镜中的面貌、发型、服装必须与此完全一致）</p>
+      </div>
+    </section>
+
+    <!-- 03 -->
+    <section class="section">
+      <div class="folio"><span class="no">03 · 效果</span><span>逐镜核验</span></div>
+      <h2>全片六镜，同一个人</h2>
+      <figure class="fig">
+        <img src="assets/persona-fix-compare.png" alt="第 3 句分镜修复前后对比" />
+        <figcaption>第 3 句分镜修复前后：左（旧）黑袍红领；右（新）月白长衫、朱色缘边、青色腰带——与全片统一。</figcaption>
+      </figure>
+      <figure class="fig">
+        <img src="assets/persona-verify-grid.png" alt="新分镜四联：第 1-4 句人物形象一致" />
+        <figcaption>第 1–4 句新分镜（左 → 右）：井栏旁俯瞰 → 低头疑霜 → 举头望月 → 低首思乡；同一形象贯穿四个姿态。</figcaption>
+      </figure>
+      <div class="bleed">
+        <table class="tbl">
+          <thead><tr><th>分镜</th><th>识图核验读出的形象</th><th>结论</th></tr></thead>
+          <tbody>
+            <tr><td>第 1 句 · 井栏月光</td><td>白袍、红色领缘与袖口、青蓝腰带，黑发束髻，侧身低头望向水井</td><td>一致</td></tr>
+            <tr><td>第 2 句 · 疑是地上霜</td><td>同一位青年，白袍红缘、侧身朝左低头</td><td>一致</td></tr>
+            <tr><td>第 3 句 · 举头望明月</td><td>同上，仰首望月；下巴仅浅影、无明显胡须</td><td>一致</td></tr>
+            <tr><td>第 4 句 · 低头思故乡</td><td>同上，侧身低头沉思</td><td>一致</td></tr>
+            <tr><td>标题镜 · 尾声镜</td><td>同一形象侧坐窗边 / 立于月下</td><td>一致</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="note-label">核验方式</span>
+        <p>对全部 6 张分镜图与成片抽帧逐一调用识图接口，逐项比对年龄段、服装颜色与制式、发型与姿态；成片字幕同步复核（旁白/字幕=逐句释义）。</p>
+      </div>
+    </section>
+
+    <!-- 04 -->
+    <section class="section">
+      <div class="folio"><span class="no">04 · 工作台</span><span>可见、可改</span></div>
+      <h2>「人物」块：判定透明，描述可编辑</h2>
+      <figure class="fig">
+        <img src="assets/persona-ui.png" alt="创作台人物块：显示判定结果与固定形象" />
+        <figcaption>创作台「人物」块：显示「谁 + 全片同一形象（内置设定）」，点一下即可修改形象描述（2026-10-02 实机截图）。</figcaption>
+      </figure>
+      <ul class="points">
+        <li><strong>改完怎么生效</strong> —— 修改形象描述后按「重新合成」；要让画面按新形象重出，请勾选「重新生成意境图」（默认复用旧画面）。</li>
+        <li><strong>旧作品自动兼容</strong> —— 打开历史任务时若无判定字段，会按诗句自动推导并在面板展示，无需重跑。</li>
+        <li><strong>诚实说明</strong> —— 自定义诗的关键词推断是通用兜底（未接入大模型时）；出图模型仍有随机性，同一设定下细节可能存在微差——若需要「同一张脸」级的一致，后续可接参考图链路（路线图项）。</li>
+      </ul>
+    </section>
+
+    <footer class="colophon">
+      <p class="closing">盛唐的月亮只有一轮，画面里的诗人，也该只有一位。</p>
+      <p style="font-size:14px; color:var(--muted); max-width:44rem;">注：本页所有判定结果、识图结论与截图均来自 2026-10-02 本机实测（成片《静夜思》井栏编辑版 · 54 秒 · seedream 出图）。</p>
+      <div class="colophon-meta">
+        <span>诗影工坊 · 创作台 V2</span>
+        <span>配套《交付报告》《配音升级》《迭代说明》</span>
+        <span>工坊手记 · 增补页 03 · 完</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

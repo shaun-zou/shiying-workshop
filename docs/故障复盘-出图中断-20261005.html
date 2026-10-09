@@ -1,0 +1,183 @@
+<!doctype html>
+<!--
+  诗影工坊 · 运维手记 · 故障复盘 01（更正版）—— 出图中断：从报错到补跑完成（单文件 Native HTML）
+  images 相对路径（docs/assets/），双击即开
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>诗影工坊 · 故障复盘：一次出图中断（更正版）</title>
+  <style>
+    :root {
+      --bg: #F7F4EC; --surface: #FEFCF6; --surface-2: #F2EDE0;
+      --ink: #23201A; --body: #3B362D; --muted: #6E6A5C;
+      --rule: #E3DCCB; --rule-strong: #CDC5AF; --accent: #B03A2E;
+      --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", "SimSun", Georgia, serif;
+      --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+      --measure: 46rem;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--body); font-family: var(--sans); font-size: 15.5px; line-height: 1.75; -webkit-font-smoothing: antialiased; }
+    h1, h2, h3 { margin: 0; color: var(--ink); font-weight: 600; text-wrap: balance; }
+    p { margin: 0 0 1em; }
+    a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+    .canvas { max-width: 860px; margin-inline: auto; padding: clamp(40px, 6vw, 88px) clamp(22px, 5vw, 56px) 72px; }
+
+    .cover { padding-bottom: 40px; border-bottom: 1px solid var(--rule-strong); }
+    .cover-kicker { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted); margin-bottom: 26px; }
+    .seal-sm { width: 22px; height: 22px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--surface); font-family: var(--serif); font-size: 13px; line-height: 1; border-radius: 4px; }
+    .cover h1 { font-family: var(--serif); font-size: clamp(32px, 5vw, 50px); line-height: 1.14; letter-spacing: -0.02em; }
+    .cover-sub { margin-top: 14px; font-size: 16.5px; max-width: 40rem; }
+    .cover-meta { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+
+    .section { border-bottom: 1px solid var(--rule-strong); padding: 44px 0 38px; }
+    .section:last-of-type { border-bottom: 0; }
+    .folio { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 22px; }
+    .folio .no { color: var(--ink); font-weight: 500; }
+    .section h2 { font-family: var(--serif); font-size: clamp(23px, 3vw, 29px); line-height: 1.3; margin-bottom: 16px; letter-spacing: -0.01em; }
+    .prose { max-width: var(--measure); }
+    .prose strong, .points strong { color: var(--ink); font-weight: 500; }
+
+    ul.points { max-width: var(--measure); margin: 18px 0 6px; padding: 0; list-style: none; }
+    .points li { position: relative; padding: 9px 0 9px 21px; border-bottom: 1px dashed var(--rule); font-size: 14.5px; line-height: 1.75; }
+    .points li:last-child { border-bottom: 0; }
+    .points li::before { content: ""; position: absolute; left: 0; top: 1.45em; width: 9px; height: 1px; background: var(--ink); }
+
+    .note { border: 1px solid var(--rule-strong); border-radius: 2px; background: color-mix(in oklab, var(--surface) 64%, var(--bg)); padding: 14px 18px; margin: 20px 0; max-width: var(--measure); }
+    .note .note-label { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 6px; }
+    .note p { margin: 0; font-size: 14px; }
+
+    figure.fig { margin: 26px 0 10px; }
+    figure.fig img { display: block; width: 100%; height: auto; border: 1px solid var(--rule-strong); border-radius: 2px; background: var(--surface); }
+    figure.fig figcaption { margin-top: 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--muted); line-height: 1.8; }
+
+    .bleed { max-width: none; margin: 20px 0 8px; overflow-x: auto; }
+    table.tbl { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 520px; }
+    .tbl th { text-align: left; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.1em; color: var(--muted); padding: 0 18px 10px 0; border-bottom: 1px solid var(--rule-strong); white-space: nowrap; }
+    .tbl td { vertical-align: top; padding: 12px 18px 12px 0; border-bottom: 1px solid var(--rule); line-height: 1.7; }
+    .tbl tr:last-child td { border-bottom: 0; }
+    .tbl td:first-child { color: var(--ink); font-weight: 500; white-space: nowrap; padding-right: 24px; }
+    .tbl td:last-child { color: var(--muted); font-size: 13.5px; padding-right: 0; }
+
+    .colophon { padding: 40px 0 20px; }
+    .closing { font-family: var(--serif); font-size: 19px; line-height: 1.75; color: var(--ink); max-width: 34rem; margin: 0 0 18px; }
+    .colophon-meta { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--muted); }
+    code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-2); border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+    <header class="cover">
+      <div class="cover-kicker"><span class="seal-sm" aria-hidden="true">坊</span>诗影工坊 · 运维手记 · 故障复盘 01 · 更正版</div>
+      <h1>一次出图中断：从报错到补跑完成</h1>
+      <p class="cover-sub">两次出图中断先后落在《春晓》与《登鹳雀楼》。拿到报错原文后确认：原因是<strong>账户积分余额不足</strong>（<code>balance not enough</code>）——本页依据新证据更正结论，并附积分补充途径。</p>
+      <div class="cover-meta">
+        <span>日期：2026-10-05（2026-10-06 更正）</span>
+        <span>状态：已恢复 · 两部成片已补跑入库</span>
+        <span>涉及：画面工序 · seedream 通道 · 账户积分</span>
+      </div>
+    </header>
+
+    <!-- 01 -->
+    <section class="section">
+      <div class="folio"><span class="no">01 · 经过</span><span>时间线</span></div>
+      <h2>两次中断、一次更正、两部成片</h2>
+      <ul class="points">
+        <li><strong>10-05 00:07《春晓》渲染</strong> —— 前 3 镜（标题 / 春眠 / 啼鸟）成功；第 4 镜起失败（当时未拿到报错原文）。</li>
+        <li><strong>10-05 00:32 原样重跑</strong> —— 缺失的 3 镜成功，成片上线；当时误判为「通道临时故障」。</li>
+        <li><strong>10-05 22:10《登鹳雀楼》再次中断</strong> —— 同样「前 3 镜后断」；报错原文到手：<code>balance not enough</code>（积分余额不足，code 560092）。</li>
+        <li><strong>10-06 23:33 实测通道恢复并补跑</strong> —— 《登鹳雀楼》缺失的 3 镜全部出图，48 秒成片入库；本页同步更正结论。</li>
+      </ul>
+    </section>
+
+    <!-- 02 -->
+    <section class="section">
+      <div class="folio"><span class="no">02 · 定性（更正）</span><span>为什么是「余额不足」</span></div>
+      <h2>出图扣的是积分：余额耗尽，需要新图的分镜全部失败</h2>
+      <div class="prose">
+        <p>报错原文：<code>{"code":560092,"msg":"balance not enough"}</code> —— seedream 通道出图消耗 AutoClaw 账户积分；余额耗尽后，凡需要「新出图」的分镜全部报此错误。</p>
+      </div>
+      <ul class="points">
+        <li><strong>为什么断点整齐（先成功后失败）</strong> —— 缓存命中的分镜不消耗积分；当时余额恰好只够那几张新图：每成功一张，下一张就报「余额不足」。</li>
+        <li><strong>为什么「过段时间重跑」有时能成功</strong> —— 积分余额为分批 / 波动可用（10-06 晚实测可直接出图）；重跑可能有效，但不可依赖——要从根上避免中断，需保持积分余额充足。</li>
+        <li><strong>影响范围</strong> —— 只影响「需要新出图」的镜；配音、配乐、合成与缓存复用不受影响；重新合成只补缺失的镜，几乎零浪费。</li>
+      </ul>
+      <div class="note">
+        <span class="note-label">更正声明</span>
+        <p>本页 10-05 初版曾将原因写作「通道侧瞬时异常（超时 / 限流类）」——那是未拿到报错原文时的推断。现依据 <code>balance not enough</code> 原文更正为「积分余额不足」，特此说明。</p>
+      </div>
+    </section>
+
+    <!-- 03 -->
+    <section class="section">
+      <div class="folio"><span class="no">03 · 已处理</span><span>加固 + 补跑</span></div>
+      <h2>三件事：加固、补跑、更正</h2>
+      <ul class="points">
+        <li><strong>重试加固（10-05，保留有效）</strong> —— 出图自动重试 4 次（退避 3s / 8s / 15s），并把原始报错写入错误信息；正是它让 <code>balance not enough</code> 的原文得以暴露。</li>
+        <li><strong>《春晓》补跑完成</strong> —— 10-05 00:41 入库（50 秒 · 云阙配音）。</li>
+        <li><strong>《登鹳雀楼》补跑完成</strong> —— 10-06 23:35 入库（48 秒 · 云阙配音 · 编辑释义版）。</li>
+      </ul>
+      <figure class="fig">
+        <img src="assets/dengque-restored-frame.png" alt="补跑版《登鹳雀楼》成片抽帧" />
+        <figcaption>补跑版《登鹳雀楼》成片抽帧（第 3 句「欲穷千里目」）：字幕与人物形象核验正常。</figcaption>
+      </figure>
+    </section>
+
+    <!-- 04 -->
+    <section class="section">
+      <div class="folio"><span class="no">04 · 积分补充途径</span><span>数据截至 2026-10-06 23:30</span></div>
+      <h2>两种方式：月度会员 / 积分加油包</h2>
+      <div class="prose"><p>当前账户：<strong>无订阅</strong>，<strong>首月优惠权益可用</strong>。以下为实时商品数据——</p></div>
+      <div class="bleed">
+        <table class="tbl">
+          <thead><tr><th>月度会员</th><th>价格</th><th>首月优惠</th><th>积分（月 + 日领×30）</th><th>定位</th></tr></thead>
+          <tbody>
+            <tr><td>入门套餐</td><td>¥29.00/月</td><td>—</td><td>5000 / 月</td><td>轻度使用、低门槛</td></tr>
+            <tr><td>基础套餐</td><td>¥109.00/月</td><td><strong>¥59.00</strong></td><td>26000 / 月</td><td>有稳定使用需求</td></tr>
+            <tr><td>进阶套餐</td><td>¥499.00/月</td><td><strong>¥399.00</strong></td><td>129000 / 月</td><td>高频使用场景</td></tr>
+            <tr><td>旗舰套餐</td><td>¥999.00/月</td><td>—</td><td>258000 / 月</td><td>重度、长期使用</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bleed">
+        <table class="tbl">
+          <thead><tr><th>积分加油包</th><th>积分</th><th>价格</th><th>有效期</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>入门包</td><td>2000</td><td>¥14.90</td><td>30 天</td><td>可购买</td></tr>
+            <tr><td>标准包</td><td>20000</td><td>¥109.00</td><td>99 天</td><td>暂不可购买</td></tr>
+            <tr><td>进阶包</td><td>48000</td><td>¥259.00</td><td>99 天</td><td>可购买</td></tr>
+            <tr><td>旗舰开发者包</td><td>100000</td><td>¥499.00</td><td>99 天</td><td>可购买</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <span class="note-label">说明</span>
+        <p>要开通 / 购买时，回复商品名即可代跑下单流程；积分与会员均为虚拟商品，一经支付不可退款。</p>
+      </div>
+    </section>
+
+    <!-- 05 -->
+    <section class="section">
+      <div class="folio"><span class="no">05 · 建议</span><span>怎么少踩坑</span></div>
+      <h2>三条小习惯</h2>
+      <ul class="points">
+        <li><strong>出片前瞄一眼余额</strong> —— 接近耗尽先补充：持续出片选会员、临时补量选加油包。</li>
+        <li><strong>失败后直接「重新合成」</strong> —— 只补缺失的镜（其余命中缓存），几分钟补齐。</li>
+        <li><strong>完全不想耗积分时</strong> —— 可切离线 <code>svg</code> 通道出片（水墨分镜风格，0 积分）。</li>
+      </ul>
+    </section>
+
+    <footer class="colophon">
+      <p class="closing">出图中断并不可怕：缺的镜补上、原因查清、途径备好——成片照常入库。</p>
+      <p style="font-size:14px; color:var(--muted); max-width:44rem;">注：本页时间点、时长、核验结论与商品数据均来自 2026-10-05 至 10-06 本机记录与实时查询。</p>
+      <div class="colophon-meta">
+        <span>诗影工坊 · 创作台 V2</span>
+        <span>运维手记 · 故障复盘 01 · 更正版</span>
+        <span>完</span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
