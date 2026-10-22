@@ -84,6 +84,10 @@ export interface Scene {
   minDurMs: number; // 设计时长（下限）
   durMs: number; // 实际时长（配音后确定）
   image?: string; // 本地图片路径
+  /** 本镜不发起出图：画面工序直接复用上一张分镜的图（尾声镜固定为 true，省一次出图/视频生成） */
+  reuseImage?: boolean;
+  imageUrl?: string; // 图片的远端 URL（agnes 出图时记录；图生视频首帧用，缓存侧车文件持久化）
+  video?: string; // 本地视频片段路径（动效工序：图生视频；存在时合成工序用它替代静态图+运镜）
   audio?: string; // 本地配音路径（wav）
   audioDurMs?: number;
 }
@@ -114,13 +118,18 @@ export interface RunOptions {
   freshImages?: boolean;
   /** 复用某次任务的配音（按段文本哈希命中缓存） */
   reuseAudioFrom?: string;
+  /** 动效通道：none（默认，静态图+运镜）| agnes（agnes-video-2.5-flash 关键分镜图生视频） */
+  motion?: string;
+  /** 艺术风格：ink（默认水墨）| gongbi | dunhuang | ukiyoe | oil | postimpression | impression | shinkai | pixel */
+  style?: string;
 }
 
 /** 任务清单（manifest.json） */
 export interface Manifest {
   jobId: string;
   createdAt: string;
-  providers: { text: string; image: string; voice: string; bgm: string };
+  providers: { text: string; image: string; motion: string; voice: string; bgm: string };
+  style: string;
   size: string;
   fps: number;
   poem: { title: string; author: string; dynasty: string; lines: string[] };
@@ -134,7 +143,10 @@ export interface Manifest {
     startMs: number;
     durMs: number;
     image: string | null;
+    clip: string | null;
     audio: string | null;
+    /** true = 本镜画面复用相邻上一张图（尾声镜），未单独出图 */
+    reuseImage?: boolean;
   }>;
   files: {
     video: string;
@@ -159,14 +171,15 @@ export interface JobEvent {
   data?: unknown;
 }
 
-export type StageId = "text" | "scenes" | "images" | "voice" | "compose";
+export type StageId = "text" | "scenes" | "images" | "motion" | "voice" | "compose";
 
-export const STAGE_ORDER: StageId[] = ["text", "scenes", "images", "voice", "compose"];
+export const STAGE_ORDER: StageId[] = ["text", "scenes", "images", "motion", "voice", "compose"];
 
 export const STAGE_LABELS: Record<StageId, string> = {
   text: "文本工序",
   scenes: "分镜工序",
   images: "画面工序",
+  motion: "动效工序",
   voice: "声音工序",
   compose: "合成工序",
 };

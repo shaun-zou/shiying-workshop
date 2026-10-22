@@ -10,10 +10,13 @@ import { BGM_LABELS, ROOT, VOICE_PROFILES, getConfig } from "./config.ts";
 import { runPipeline, readManifest } from "./pipeline.ts";
 import { loadBuiltins } from "./text.ts";
 import { derivePersona } from "./persona.ts";
+import { STYLE_LIST } from "./styles.ts";
 import type { Analysis, EventSink, JobEvent, RunOptions, StageId } from "./types.ts";
 import { STAGE_LABELS } from "./types.ts";
 import { exists } from "./util.ts";
 import { resolveVoiceProfiles } from "./voice.ts";
+import { CHANNEL_KEYS, loadSettings, normalizeIncoming, revealNodeKey, settingsView, writeSettings } from "./settings.ts";
+import type { ChannelKey } from "./settings.ts";
 
 interface JobRecord {
   id: string;
@@ -36,7 +39,8 @@ interface JobRecord {
 const STAGE_WEIGHT: Record<StageId, number> = {
   text: 0.06,
   scenes: 0.03,
-  images: 0.42,
+  images: 0.36,
+  motion: 0.06,
   voice: 0.2,
   compose: 0.29,
 };
@@ -59,7 +63,7 @@ function jobDirById(id: string): string | null {
 }
 
 function computeOverall(job: JobRecord): number {
-  const order: StageId[] = ["text", "scenes", "images", "voice", "compose"];
+  const order: StageId[] = ["text", "scenes", "images", "motion", "voice", "compose"];
   let acc = 0;
   for (const st of order) {
     const w = STAGE_WEIGHT[st];
@@ -163,6 +167,8 @@ function startJob(input: {
       narration: input.options?.narration === "line" ? "line" : "both",
       keepWatermark: input.options?.cropWatermark === true ? false : undefined,
       freshImages: input.options?.freshImages === true,
+      motion: str(input.options?.motion),
+      style: str(input.options?.style),
       concurrency: num(input.options?.concurrency),
     };
     // 编辑重合成：复用上一条任务的图片（跳过画面工序）
@@ -269,7 +275,8 @@ function serveFile(req: http.IncomingMessage, res: http.ServerResponse, file: st
     "Content-Type": type,
     "Content-Length": stat.size,
     "Accept-Ranges": "bytes",
-    "Cache-Control": "no-cache",
+    // 页面文件禁缓存（工作台前端常改，避免浏览器拿旧页）；媒体仍用 no-cache 允许启发式缓存
+    "Cache-Control": ext === ".html" ? "no-store" : "no-cache",
   });
   if (isHead) {
     res.end();
@@ -300,8 +307,9 @@ export async function startServer(opts: ServerOptions): Promise<void> {
         return;
       }
 
-      // 配置与资源
+      // 配置与资源（getConfig() 现读：通道设置保存后新任务即时生效）
       if (req.method === "GET" && p === "/api/config") {
+        const cfg = getConfig();
         const poems = Object.values(loadBuiltins()).map((b) => ({
           id: b.id,
           title: b.title,
@@ -320,9 +328,11 @@ export async function startServer(opts: ServerOptions): Promise<void> {
           poems,
           voiceProfiles,
           bgmOptions: Object.entries(BGM_LABELS).map(([id, label]) => ({ id, label })),
+          styles: STYLE_LIST.map((s) => ({ id: s.id, label: s.label, hint: s.hint, swatch: s.swatch })),
           sizes: ["1080x1920", "720x1280", "540x960"],
           defaults: {
             image: cfg.image.provider,
+            style: cfg.style,
             voice: "qingzheng",
             bgm: cfg.bgm === "none" ? "none" : cfg.bgm,
             narration: "both",
@@ -334,6 +344,77 @@ export async function startServer(opts: ServerOptions): Promise<void> {
             voice: cfg.voice.provider,
           },
         });
+        return;
+      }
+
+      // 通道设置：读取（脱敏视图）
+      if (req.method === "GET" && p === "/api/settings") {
+        json(res, 200, { ok: true, ...settingsView(getConfig()) });
+        return;
+      }
+
+      // 通道设置：保存（normalizeIncoming 内合并旧 Key：空串=保留，"__clear__"=清除）
+      if (req.method === "POST" && p === "/api/settings") {
+        const body = await readBody(req);
+        const normalized = normalizeIncoming(JSON.parse(body || "{}"));
+        writeSettings(normalized);
+        json(res, 200, { ok: true, ...settingsView(getConfig()) });
+        return;
+      }
+
+      // 通道连通性测试：探 OpenAI 兼容 GET {baseUrl}/models
+      if (req.method === "POST" && p === "/api/settings/test") {
+        const body = await readBody(req);
+        const data = JSON.parse(body || "{}") as { channel?: string; node?: { id?: string; baseUrl?: string; apiKey?: string } };
+        const ch = data.channel;
+        const isChannel = (v: string | undefined): v is ChannelKey =>
+          v === "text" || v === "image" || v === "video" || v === "voice";
+        if (!isChannel(ch)) {
+          json(res, 400, { ok: false, error: "未知通道" });
+          return;
+        }
+        const node = data.node ?? {};
+        const nid = String(node.id ?? "");
+        // 本地/离线通道无需远端探测
+        const LOCAL: Record<ChannelKey, ReadonlySet<string>> = {
+          text: new Set(["offline"]),
+          image: new Set(["svg", "seedream"]),
+          video: new Set(["none"]),
+          voice: new Set(["edge", "sapi"]),
+        };
+        if (LOCAL[ch].has(nid)) {
+          json(res, 200, { ok: true, status: "local", message: "本地通道，无需联网测试" });
+          return;
+        }
+        // Key 合并：前端留空 → 设置文件已存 → env 层兜底
+        const cfgNow = getConfig();
+        const seg =
+          ch === "video" ? cfgNow.motion : ch === "text" ? cfgNow.text : ch === "image" ? cfgNow.image : cfgNow.voice;
+        const savedKey = revealNodeKey(loadSettings()?.channels[ch].nodes.find((n) => n.id === nid));
+        const baseUrl = (String(node.baseUrl ?? "") || seg.baseUrl).replace(/\/+$/, "");
+        if (!/^https?:\/\//i.test(baseUrl)) {
+          json(res, 200, { ok: false, status: "error", message: "接口地址无效（需以 http(s):// 开头）" });
+          return;
+        }
+        const key = String(node.apiKey ?? "") || savedKey || seg.apiKey || "";
+        try {
+          const r = await fetch(`${baseUrl}/models`, {
+            headers: key ? { Authorization: `Bearer ${key}` } : {},
+            signal: AbortSignal.timeout(12000),
+          });
+          if (r.ok) {
+            json(res, 200, { ok: true, status: "ok", message: `连接正常（HTTP ${r.status}）` });
+          } else if (r.status === 401 || r.status === 403) {
+            json(res, 200, { ok: false, status: "error", message: `鉴权失败（HTTP ${r.status}），请检查 API Key` });
+          } else if (r.status === 404 || r.status === 405) {
+            json(res, 200, { ok: true, status: "warn", message: `服务可达，但 /models 不可用（HTTP ${r.status}），可能仍可正常生成` });
+          } else {
+            json(res, 200, { ok: false, status: "error", message: `HTTP ${r.status}` });
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          json(res, 200, { ok: false, status: "error", message: `连接失败：${msg.slice(0, 120)}` });
+        }
         return;
       }
 
@@ -355,7 +436,7 @@ export async function startServer(opts: ServerOptions): Promise<void> {
         return;
       }
 
-      // 作品库：磁盘上的历史任务
+      // 作品库：磁盘上的历史任务（全量返回；前端「最近作品」自行折叠展示前 5 条）
       if (req.method === "GET" && p === "/api/works") {
         const dirs = exists(outRoot) ? fs.readdirSync(outRoot).filter((d) => d.startsWith("job-")) : [];
         const works = dirs
@@ -373,8 +454,7 @@ export async function startServer(opts: ServerOptions): Promise<void> {
             };
           })
           .filter((w): w is NonNullable<typeof w> => Boolean(w))
-          .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-          .slice(0, 12);
+          .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
         json(res, 200, { ok: true, works });
         return;
       }

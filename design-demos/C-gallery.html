@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1440">
+<title>诗影工坊 · 方向 C — 画廊策展</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Serif+SC:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --wall:#FAFAF7;
+  --wall-2:#F4F3EE;
+  --ink:#1C1B18;
+  --ink-2:#55524B;
+  --ink-3:#8B877D;
+  --brass:#A67C37;
+  --brass-deep:#8A6528;
+  --brass-soft:rgba(166,124,55,.14);
+  --line:#1C1B18;
+  --hair:rgba(28,27,24,.16);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{background:var(--wall);}
+body{
+  font-family:'Noto Sans SC',sans-serif;
+  color:var(--ink);
+  background:var(--wall);
+  -webkit-font-smoothing:antialiased;
+  font-size:14px;
+  line-height:1.7;
+}
+.serif{font-family:'Noto Serif SC','EB Garamond',serif;}
+.garamond{font-family:'EB Garamond','Noto Serif SC',serif;}
+
+/* ============ 顶部馆务栏 ============ */
+.museum-bar{
+  height:64px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 64px;
+  border-bottom:1px solid var(--ink);
+  background:var(--wall);
+  position:sticky;top:0;z-index:50;
+}
+.wordmark{display:flex;align-items:baseline;gap:14px;}
+.wordmark .cn{font-family:'Noto Serif SC',serif;font-weight:900;font-size:22px;letter-spacing:.18em;}
+.wordmark .en{font-family:'EB Garamond',serif;font-size:12px;letter-spacing:.32em;color:var(--ink-3);text-transform:uppercase;}
+.route{display:flex;align-items:center;gap:0;font-size:13px;color:var(--ink-2);}
+.route .stop{padding:6px 2px;position:relative;}
+.route .stop + .stop::before{
+  content:"";display:inline-block;width:26px;height:1px;background:var(--ink-3);
+  vertical-align:middle;margin:0 14px;
+}
+.route .stop.done{color:var(--ink-3);}
+.route .stop.now{color:var(--brass-deep);font-weight:700;}
+.route .stop.now::after{
+  content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;background:var(--brass);
+}
+.route .num{font-family:'EB Garamond',serif;font-size:11px;letter-spacing:.1em;margin-right:6px;color:inherit;opacity:.7;}
+
+/* ============ 第一幕：展厅墙 ============ */
+.hall{padding:72px 64px 88px;border-bottom:1px solid var(--ink);}
+.hall-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:56px;}
+.eyebrow{font-size:12px;letter-spacing:.42em;color:var(--brass-deep);text-transform:uppercase;font-family:'EB Garamond',serif;margin-bottom:14px;}
+.h1{font-family:'Noto Serif SC',serif;font-weight:900;font-size:56px;letter-spacing:.06em;line-height:1.15;}
+.h1 em{font-style:normal;color:var(--brass-deep);}
+.hall-note{max-width:300px;text-align:right;color:var(--ink-2);font-size:13px;}
+.hall-note .rule{width:48px;height:1px;background:var(--ink);margin:0 0 12px auto;}
+
+.wall-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:48px;align-items:start;}
+.exhibit{position:relative;}
+.frame{
+  border:1px solid var(--ink);
+  padding:10px;
+  background:#fff;
+  box-shadow:0 1px 0 rgba(28,27,24,.06), 14px 18px 32px -22px rgba(28,27,24,.35);
+}
+.frame .mat{
+  border:1px solid var(--hair);
+  padding:18px;
+  background:var(--wall);
+}
+.art-916{
+  aspect-ratio:9/16;
+  position:relative;
+  overflow:hidden;
+  border:1px solid var(--hair);
+}
+.art-1{background:
+  radial-gradient(120% 60% at 70% 18%, rgba(240,238,225,.9) 0%, rgba(240,238,225,0) 46%),
+  radial-gradient(60% 26% at 68% 16%, rgba(235,230,205,.95) 0%, rgba(235,230,205,0) 60%),
+  linear-gradient(180deg,#2E3A3F 0%, #4A5856 34%, #8B948A 58%, #C9CCBC 78%, #E7E5D6 100%);}
+.art-1::after{content:"";position:absolute;left:12%;right:12%;bottom:9%;height:22%;
+  background:radial-gradient(50% 60% at 50% 100%, rgba(28,27,24,.45), rgba(28,27,24,0) 70%);}
+.art-1 .moon{position:absolute;top:11%;left:58%;width:56px;height:56px;border-radius:50%;
+  background:radial-gradient(circle at 42% 38%, #FBF8EA, #E8E2C6 70%, #D8D0AC);
+  box-shadow:0 0 34px 10px rgba(250,246,224,.5);}
+.art-2{background:
+  radial-gradient(100% 50% at 30% 20%, rgba(233,229,210,.55) 0%, rgba(233,229,210,0) 55%),
+  linear-gradient(160deg,#3B4A3E 0%, #5C6B52 40%, #93A07E 72%, #D6D7C2 100%);}
+.art-3{background:
+  linear-gradient(180deg,#39434E 0%, #5F6E74 38%, #97A3A0 66%, #DCD9C8 100%);}
+.art-3::before{content:"";position:absolute;top:16%;left:14%;right:14%;height:1px;background:rgba(250,248,240,.5);}
+.play-badge{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:52px;height:52px;border-radius:50%;border:1px solid rgba(250,248,240,.85);
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(28,27,24,.25);
+}
+.play-badge::after{content:"";border-style:solid;border-width:8px 0 8px 13px;border-color:transparent transparent transparent #FAF8F0;margin-left:3px;}
+.museum-label{
+  margin-top:18px;
+  background:linear-gradient(180deg,#F3E9D2,#EEDFBF);
+  border:1px solid var(--brass);
+  padding:12px 16px 11px;
+  box-shadow:2px 2px 0 rgba(166,124,55,.22);
+}
+.museum-label .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;letter-spacing:.08em;}
+.museum-label .m{font-size:12px;color:var(--ink-2);margin-top:3px;letter-spacing:.05em;}
+.museum-label .m .garamond{letter-spacing:.06em;}
+.label-row{display:flex;justify-content:space-between;align-items:baseline;}
+.channel{font-family:'EB Garamond',serif;font-size:11px;letter-spacing:.14em;color:var(--brass-deep);text-transform:uppercase;}
+
+.empty-exhibit .frame{background:transparent;border:1px dashed var(--ink-3);box-shadow:none;}
+.empty-exhibit .mat{border:1px dashed var(--hair);background:transparent;}
+.empty-slot{
+  aspect-ratio:9/16;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  color:var(--ink-3);
+}
+.empty-slot .plus{width:44px;height:44px;border:1px solid var(--ink-3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'EB Garamond',serif;font-size:26px;line-height:1;}
+.empty-slot .txt{font-size:13px;letter-spacing:.24em;}
+.empty-exhibit .museum-label{background:transparent;border:1px dashed var(--ink-3);box-shadow:none;color:var(--ink-3);}
+
+/* ============ 第二幕：策展工作台 ============ */
+.studio{padding:88px 64px 96px;border-bottom:1px solid var(--ink);background:var(--wall);}
+.studio-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:52px;}
+.h2{font-family:'Noto Serif SC',serif;font-weight:900;font-size:40px;letter-spacing:.08em;}
+.studio-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:64px;}
+
+/* 展签编辑区 */
+.cat-sheet{border:1px solid var(--ink);background:#fff;}
+.cat-head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:20px 28px 16px;border-bottom:1px solid var(--ink);
+}
+.cat-head .work{font-family:'Noto Serif SC',serif;font-weight:900;font-size:26px;letter-spacing:.1em;}
+.cat-head .meta{font-family:'EB Garamond',serif;font-size:12px;letter-spacing:.22em;color:var(--ink-2);}
+.cat-body{padding:8px 28px 26px;}
+.verse-row{
+  display:grid;grid-template-columns:120px 1fr 30px;gap:22px;
+  padding:18px 0;border-bottom:1px solid var(--hair);align-items:start;
+}
+.verse-row:last-child{border-bottom:none;}
+.verse-src{font-family:'Noto Serif SC',serif;font-weight:700;font-size:17px;letter-spacing:.12em;line-height:1.9;}
+.verse-src .idx{display:block;font-family:'EB Garamond',serif;font-weight:400;font-size:11px;letter-spacing:.2em;color:var(--brass-deep);margin-bottom:4px;}
+.verse-edit{width:100%;border:none;resize:none;background:transparent;
+  font-family:'Noto Sans SC',sans-serif;font-size:14px;line-height:1.8;color:var(--ink);
+  border-left:1px solid transparent;padding-left:18px;outline:none;transition:border-color .2s;}
+.verse-edit:hover{border-left-color:var(--hair);}
+.verse-edit:focus{border-left-color:var(--brass);}
+.pen{color:var(--ink-3);font-family:'EB Garamond',serif;font-size:14px;padding-top:4px;}
+.sheet-tabs{display:flex;gap:0;border-bottom:1px solid var(--ink);}
+.sheet-tabs .tab{
+  padding:10px 22px;font-size:13px;letter-spacing:.14em;color:var(--ink-2);
+  border-right:1px solid var(--hair);cursor:pointer;background:var(--wall-2);position:relative;
+}
+.sheet-tabs .tab.on{background:#fff;color:var(--brass-deep);font-weight:700;}
+.sheet-tabs .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:#fff;}
+.sheet-tabs .tab.on::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--brass);}
+.knowledge{padding:22px 28px 26px;font-size:14px;color:var(--ink-2);}
+.knowledge p{margin-bottom:12px;}
+.knowledge .field{margin-bottom:18px;}
+.knowledge .f-label{font-family:'EB Garamond',serif;font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--brass-deep);margin-bottom:6px;display:flex;align-items:center;gap:10px;}
+.knowledge .f-label::after{content:"";flex:1;height:1px;background:var(--hair);}
+.knowledge .f-text{border:none;background:transparent;resize:none;width:100%;font:inherit;color:var(--ink);outline:none;line-height:1.85;}
+.knowledge .f-text:focus{background:var(--brass-soft);}
+
+/* 装裱样本墙 */
+.mount-wall{border:1px solid var(--ink);background:#fff;padding:24px 26px 26px;}
+.mount-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;}
+.mount-title{font-family:'Noto Serif SC',serif;font-weight:700;font-size:19px;letter-spacing:.14em;}
+.mount-sub{font-family:'EB Garamond',serif;font-size:11px;letter-spacing:.24em;color:var(--ink-3);text-transform:uppercase;}
+.molding-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+.molding{cursor:pointer;text-align:center;}
+.molding .sample{
+  aspect-ratio:1/1;padding:7px;background:#fff;border:1px solid var(--ink);
+  transition:box-shadow .2s, transform .2s;
+}
+.molding .sample .inner{width:100%;height:100%;border:1px solid var(--hair);}
+.molding:hover .sample{box-shadow:4px 4px 0 rgba(28,27,24,.14);transform:translate(-2px,-2px);}
+.molding.sel .sample{border:2px solid var(--brass);box-shadow:4px 4px 0 var(--brass-soft);}
+.molding .nm{font-size:12px;letter-spacing:.1em;margin-top:8px;color:var(--ink-2);}
+.molding.sel .nm{color:var(--brass-deep);font-weight:700;}
+.m-ink{background:linear-gradient(160deg,#F5F3EC 0%,#D8D5C6 55%,#2E3230 130%);}
+.m-gongbi{background:linear-gradient(160deg,#F7EFDD 0%,#E3C89A 60%,#A34E36 120%);}
+.m-dunhuang{background:linear-gradient(160deg,#E8D9B8 0%,#B98A4E 55%,#5C4A6B 120%);}
+.m-ukiyo{background:linear-gradient(160deg,#ECE6D4 0%,#7FA3B0 55%,#274257 120%);}
+.m-oil{background:linear-gradient(160deg,#EDE5D2 0%,#8A7A4E 55%,#3C3428 120%);}
+.m-postimp{background:linear-gradient(160deg,#F0E8CE 0%,#C9A23C 55%,#31557A 120%);}
+.m-imp{background:linear-gradient(160deg,#F2EEE2 0%,#A8BCA8 55%,#5E7B8C 120%);}
+.m-shinkai{background:linear-gradient(160deg,#EAF0F6 0%,#8FB4D9 55%,#3D5A80 120%);}
+.m-pixel{background:
+  linear-gradient(45deg,#D8D2BC 25%,transparent 25%,transparent 75%,#D8D2BC 75%),
+  linear-gradient(45deg,#D8D2BC 25%,#C3BCA2 25%,#C3BCA2 75%,#D8D2BC 75%);
+  background-size:12px 12px;background-position:0 0,6px 6px;}
+.mount-foot{margin-top:22px;padding-top:18px;border-top:1px solid var(--hair);display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.opt-group .g-label{font-family:'EB Garamond',serif;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--brass-deep);margin-bottom:10px;}
+.opt{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;color:var(--ink-2);cursor:pointer;}
+.opt .dot{width:11px;height:11px;border:1px solid var(--ink-3);border-radius:50%;flex:none;position:relative;}
+.opt.on{color:var(--ink);font-weight:500;}
+.opt.on .dot{border-color:var(--brass);}
+.opt.on .dot::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--brass);}
+
+/* ============ 第三幕：布展 + 开幕墙 ============ */
+.opening{padding:88px 64px 72px;background:var(--wall-2);}
+.opening-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:72px;align-items:start;}
+
+/* 布展进度 */
+.hang-card{border:1px solid var(--ink);background:#fff;padding:26px 30px 28px;}
+.proc{display:flex;align-items:center;margin:26px 0 8px;}
+.proc .step{flex:1;text-align:center;position:relative;}
+.proc .step .knob{
+  width:14px;height:14px;border-radius:50%;border:1px solid var(--ink);background:#fff;margin:0 auto 10px;position:relative;z-index:2;
+}
+.proc .step.done .knob{background:var(--ink);}
+.proc .step.live .knob{border-color:var(--brass);background:#fff;}
+.proc .step.live .knob::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--brass);animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.proc .step::before{content:"";position:absolute;top:7px;left:-50%;width:100%;height:1px;background:var(--hair);z-index:1;}
+.proc .step:first-child::before{display:none;}
+.proc .step.done::before{background:var(--ink);}
+.proc .s-name{font-size:12px;letter-spacing:.18em;color:var(--ink-2);}
+.proc .step.done .s-name{color:var(--ink);}
+.proc .step.live .s-name{color:var(--brass-deep);font-weight:700;}
+.hang-status{margin-top:20px;padding:14px 18px;border:1px solid var(--hair);background:var(--wall);font-size:13px;color:var(--ink-2);display:flex;justify-content:space-between;align-items:center;}
+.hang-status .garamond{letter-spacing:.08em;color:var(--brass-deep);}
+.btn-row{display:flex;gap:14px;margin-top:24px;}
+.btn{
+  flex:1;text-align:center;padding:13px 0;font-size:13px;letter-spacing:.3em;cursor:pointer;
+  border:1px solid var(--ink);background:transparent;color:var(--ink);font-family:'Noto Serif SC',serif;font-weight:700;
+}
+.btn.primary{background:var(--ink);color:var(--wall);}
+.btn.brass{border-color:var(--brass);color:var(--brass-deep);background:var(--brass-soft);}
+
+/* 开幕预览墙 */
+.preview-wall{text-align:center;padding-top:38px;}
+.hang-frame{
+  display:inline-block;border:1px solid var(--ink);padding:12px;background:#fff;
+  box-shadow:0 2px 0 rgba(28,27,24,.08), 18px 24px 44px -26px rgba(28,27,24,.45);
+  position:relative;
+}
+.hang-frame::before{
+  content:"";position:absolute;top:-38px;left:50%;transform:translateX(-50%);
+  width:1px;height:38px;background:var(--ink-3);
+}
+.hang-frame .wire{position:absolute;top:-38px;left:50%;width:120px;height:38px;transform:translateX(-50%);}
+.hang-frame .wire::before,.hang-frame .wire::after{
+  content:"";position:absolute;top:0;width:1px;height:40px;background:var(--ink-3);
+}
+.hang-frame .wire::before{left:8px;transform:rotate(18deg);transform-origin:top;}
+.hang-frame .wire::after{right:8px;transform:rotate(-18deg);transform-origin:top;}
+.screen-916{width:228px;aspect-ratio:9/16;position:relative;overflow:hidden;border:1px solid var(--hair);}
+.subtitle-band{
+  position:absolute;left:0;right:0;bottom:34px;text-align:center;
+  font-family:'Noto Serif SC',serif;font-size:14px;letter-spacing:.22em;color:#F6F2E4;
+  text-shadow:0 1px 6px rgba(0,0,0,.6);
+}
+.timecode{position:absolute;bottom:12px;left:0;right:0;font-family:'EB Garamond',serif;font-size:10px;letter-spacing:.3em;color:rgba(246,242,228,.7);}
+.wall-label{
+  margin:20px auto 0;max-width:300px;background:linear-gradient(180deg,#F3E9D2,#EEDFBF);
+  border:1px solid var(--brass);padding:10px 18px;box-shadow:2px 2px 0 rgba(166,124,55,.22);
+}
+.wall-label .t{font-family:'Noto Serif SC',serif;font-weight:700;font-size:15px;letter-spacing:.12em;}
+.wall-label .m{font-size:11px;color:var(--ink-2);letter-spacing:.1em;margin-top:2px;}
+
+/* 长凳视角分镜条 */
+.bench{margin-top:44px;text-align:left;}
+.bench-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
+.bench-title{font-family:'EB Garamond',serif;font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-3);}
+.bench-hint{font-size:12px;color:var(--ink-3);}
+.shots{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;}
+.shot{cursor:pointer;}
+.shot .thumb{
+  aspect-ratio:9/16;border:1px solid var(--ink);position:relative;overflow:hidden;background:#fff;
+  transition:transform .18s, box-shadow .18s;
+}
+.shot:hover .thumb{transform:translateY(-4px);box-shadow:0 10px 18px -10px rgba(28,27,24,.4);}
+.shot.on .thumb{outline:2px solid var(--brass);outline-offset:2px;}
+.shot .no{
+  position:absolute;top:5px;left:6px;font-family:'EB Garamond',serif;font-size:10px;letter-spacing:.12em;
+  color:#F6F2E4;text-shadow:0 1px 3px rgba(0,0,0,.5);
+}
+.shot .reuse{
+  position:absolute;top:4px;right:4px;background:var(--brass);color:#FBF7EA;
+  font-size:9px;letter-spacing:.1em;padding:1px 5px;font-family:'Noto Sans SC',sans-serif;
+}
+.shot .cap{font-size:11px;color:var(--ink-2);margin-top:7px;letter-spacing:.06em;text-align:center;}
+.s1{background:linear-gradient(180deg,#333F45,#6E7A74 60%,#C9C8B6);}
+.s2{background:linear-gradient(180deg,#3A4440,#7C867B 55%,#D8D3BE);}
+.s3{background:linear-gradient(180deg,#2F3A42,#8A9288 50%,#E6E1CC);}
+.s4{background:linear-gradient(180deg,#28323A,#5C6B66 55%,#C4C2AE);}
+.s5{background:linear-gradient(180deg,#3E4640,#8B9082 60%,#DAD5C0);}
+.s6{background:linear-gradient(180deg,#2B353C,#5C6B66 55%,#C4C2AE);}
+.shot .dur{position:absolute;bottom:5px;right:6px;font-family:'EB Garamond',serif;font-size:9px;color:rgba(246,242,228,.85);}
+
+.footer-bar{
+  border-top:1px solid var(--ink);padding:22px 64px;display:flex;justify-content:space-between;
+  font-size:12px;color:var(--ink-3);letter-spacing:.18em;background:var(--wall);
+}
+.footer-bar .garamond{letter-spacing:.28em;text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<!-- 馆务栏 -->
+<header class="museum-bar">
+  <div class="wordmark">
+    <span class="cn serif">诗影工坊</span>
+    <span class="en">Atelier of Verse &amp; Image</span>
+  </div>
+  <nav class="route serif">
+    <span class="stop done"><span class="num">Ⅰ</span>选品 · 展厅墙</span>
+    <span class="stop now"><span class="num">Ⅱ</span>写展签 · 策展台</span>
+    <span class="stop"><span class="num">Ⅲ</span>选装裱</span>
+    <span class="stop"><span class="num">Ⅳ</span>布展 · 生成</span>
+    <span class="stop"><span class="num">Ⅴ</span>开幕 · 预览导出</span>
+  </nav>
+</header>
+
+<!-- 第一幕 · 展厅墙 -->
+<section class="hall">
+  <div class="hall-head">
+    <div>
+      <div class="eyebrow">Hall 01 — Permanent Collection</div>
+      <h1 class="h1">一号展厅 <em>·</em> 作品墙</h1>
+    </div>
+    <div class="hall-note">
+      <div class="rule"></div>
+      每一件成品皆在此装裱上墙。<br>点选展品可回看成片，或入侧厅继续策展。
+    </div>
+  </div>
+
+  <div class="wall-grid">
+    <article class="exhibit">
+      <div class="frame"><div class="mat">
+        <div class="art-916 art-1"><div class="moon"></div><div class="play-badge"></div></div>
+      </div></div>
+      <div class="museum-label">
+        <div class="label-row"><span class="t serif">静夜思</span><span class="channel">svg 画面</span></div>
+        <div class="m">唐 · 李白 — <span class="garamond">49″</span> · 二〇二六年十月十一日</div>
+      </div>
+    </article>
+
+    <article class="exhibit">
+      <div class="frame"><div class="mat">
+        <div class="art-916 art-2"><div class="play-badge"></div></div>
+      </div></div>
+      <div class="museum-label">
+        <div class="label-row"><span class="t serif">鹿柴</span><span class="channel">agnes 画面</span></div>
+        <div class="m">唐 · 王维 — <span class="garamond">50″</span> · 空山不见人</div>
+      </div>
+    </article>
+
+    <article class="exhibit">
+      <div class="frame"><div class="mat">
+        <div class="art-916 art-3"><div class="play-badge"></div></div>
+      </div></div>
+      <div class="museum-label">
+        <div class="label-row"><span class="t serif">宿建德江</span><span class="channel">水墨通道</span></div>
+        <div class="m">唐 · 孟浩然 — <span class="garamond">47″</span> · 江清月近人</div>
+      </div>
+    </article>
+
+    <article class="exhibit empty-exhibit">
+      <div class="frame"><div class="mat">
+        <div class="empty-slot"><div class="plus">+</div><div class="txt serif">新诗入藏</div></div>
+      </div></div>
+      <div class="museum-label">
+        <div class="label-row"><span class="t serif">虚位以待</span><span class="channel">Empty</span></div>
+        <div class="m">自内置诗库选诗 — 静夜思 / 春晓 / 登鹳雀楼</div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- 第二幕 · 策展工作台 -->
+<section class="studio">
+  <div class="studio-head">
+    <div>
+      <div class="eyebrow">Room 02 — Curator's Desk</div>
+      <h2 class="h2">策展工作台</h2>
+    </div>
+    <div class="hall-note">
+      <div class="rule"></div>
+      如撰写展签般逐句释义、补录背景、<br>拟定导览文案——字字皆可修订。
+    </div>
+  </div>
+
+  <div class="studio-grid">
+    <!-- 展签 -->
+    <div class="cat-sheet">
+      <div class="sheet-tabs">
+        <div class="tab on serif">逐句释义</div>
+        <div class="tab serif">背景知识</div>
+        <div class="tab serif">故事文案</div>
+      </div>
+      <div class="cat-head">
+        <span class="work">静夜思</span>
+        <span class="meta">TANG DYNASTY · LI BAI · NO. 001</span>
+      </div>
+      <div class="cat-body">
+        <div class="verse-row">
+          <div class="verse-src"><span class="idx">VER. 01</span>床前明月光</div>
+          <textarea class="verse-edit" rows="2">月光洒在床前，像一层秋霜轻轻铺地，静得能听见夜色的呼吸。</textarea>
+          <span class="pen">✎</span>
+        </div>
+        <div class="verse-row">
+          <div class="verse-src"><span class="idx">VER. 02</span>疑是地上霜</div>
+          <textarea class="verse-edit" rows="2">恍惚之间，竟疑心是深秋的霜落在了地上——凉意先从眼底升起。</textarea>
+          <span class="pen">✎</span>
+        </div>
+        <div class="verse-row">
+          <div class="verse-src"><span class="idx">VER. 03</span>举头望明月</div>
+          <textarea class="verse-edit" rows="2">抬起头来，正见那一轮明月悬在檐角之上，清辉万里，无处躲藏。</textarea>
+          <span class="pen">✎</span>
+        </div>
+        <div class="verse-row">
+          <div class="verse-src"><span class="idx">VER. 04</span>低头思故乡</div>
+          <textarea class="verse-edit" rows="2">低下头时，故乡便涌上心头——同一轮月，此刻也照着远方的门前。</textarea>
+          <span class="pen">✎</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 装裱样本墙 -->
+    <aside class="mount-wall">
+      <div class="mount-head">
+        <span class="mount-title serif">装裱样式</span>
+        <span class="mount-sub">Molding Samples · 9</span>
+      </div>
+      <div class="molding-grid">
+        <div class="molding sel"><div class="sample"><div class="inner m-ink"></div></div><div class="nm">新中式水墨</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-gongbi"></div></div><div class="nm">工笔重彩</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-dunhuang"></div></div><div class="nm">敦煌壁画</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-ukiyo"></div></div><div class="nm">浮世绘</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-oil"></div></div><div class="nm">古典油画</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-postimp"></div></div><div class="nm">后印象派</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-imp"></div></div><div class="nm">印象派</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-shinkai"></div></div><div class="nm">新海诚</div></div>
+        <div class="molding"><div class="sample"><div class="inner m-pixel"></div></div><div class="nm">8-bit 像素</div></div>
+      </div>
+      <div class="mount-foot">
+        <div class="opt-group">
+          <div class="g-label">音色 Voice</div>
+          <div class="opt on"><span class="dot"></span>云阙 · 沉静男声</div>
+          <div class="opt"><span class="dot"></span>清徵 · 清亮女声</div>
+          <div class="opt"><span class="dot"></span>松风 · 苍劲男声</div>
+          <div class="opt"><span class="dot"></span>无配音</div>
+        </div>
+        <div class="opt-group">
+          <div class="g-label">配乐 Score</div>
+          <div class="opt on"><span class="dot"></span>古琴 · 空山</div>
+          <div class="opt"><span class="dot"></span>雨声 · 檐下</div>
+          <div class="opt"><span class="dot"></span>无配乐</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 背景知识 & 故事文案（第二组展签） -->
+  <div class="studio-grid" style="margin-top:48px;">
+    <div class="cat-sheet">
+      <div class="cat-head">
+        <span class="work serif" style="font-size:20px;letter-spacing:.16em;">背景知识 · 档案卡</span>
+        <span class="meta">ARCHIVE FILE</span>
+      </div>
+      <div class="knowledge">
+        <p>开元十四年秋，李白客居扬州旅舍。时年二十六岁，离乡远游已逾两载。是夜月色极盛，落于床前如霜，遂成此二十字——千百年来，凡有明月处，皆有人低声念它。</p>
+      </div>
+    </div>
+    <div class="cat-sheet">
+      <div class="cat-head">
+        <span class="work serif" style="font-size:20px;letter-spacing:.16em;">故事文案 · 导览词</span>
+        <span class="meta">DOCENT SCRIPT</span>
+      </div>
+      <div class="knowledge">
+        <div class="field">
+          <div class="f-label">Opening Hook · 开场</div>
+          <textarea class="f-text" rows="2">一千二百年前的那个秋夜，一个失眠的人，把乡愁写成了中国人共同的月光。</textarea>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <div class="f-label">Outro · 收尾</div>
+          <textarea class="f-text" rows="2">今夜你若也抬头，那轮月还是李白看过的那一轮——千里共月，古今同此。</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 第三幕 · 布展与开幕 -->
+<section class="opening">
+  <div class="studio-head">
+    <div>
+      <div class="eyebrow">Room 03 — Hanging &amp; Vernissage</div>
+      <h2 class="h2">布展 · 开幕</h2>
+    </div>
+    <div class="hall-note">
+      <div class="rule"></div>
+      工序五道，如装裱上墙；<br>展厅尽头，画框已挂正，请上座细观。
+    </div>
+  </div>
+
+  <div class="opening-grid">
+    <!-- 布展进度 -->
+    <div class="hang-card">
+      <div class="mount-head" style="margin-bottom:0;">
+        <span class="mount-title serif">布展工序</span>
+        <span class="mount-sub">Hanging in progress</span>
+      </div>
+      <div class="proc">
+        <div class="step done"><div class="knob"></div><div class="s-name">文本</div></div>
+        <div class="step done"><div class="knob"></div><div class="s-name">分镜</div></div>
+        <div class="step live"><div class="knob"></div><div class="s-name">画面</div></div>
+        <div class="step"><div class="knob"></div><div class="s-name">声音</div></div>
+        <div class="step"><div class="knob"></div><div class="s-name">合成</div></div>
+      </div>
+      <div class="hang-status">
+        <span>正在绘制 第 3 镜「疑是地上霜」· 新中式水墨</span>
+        <span class="garamond">62%</span>
+      </div>
+      <div class="btn-row">
+        <div class="btn brass serif">导出 MP4</div>
+        <div class="btn serif">字幕 SRT</div>
+        <div class="btn serif">文案文本</div>
+      </div>
+      <div style="margin-top:16px;font-size:12px;color:var(--ink-3);text-align:center;letter-spacing:.12em;">
+        开幕之后，以上三件档案即可携走出馆
+      </div>
+    </div>
+
+    <!-- 预览墙 -->
+    <div class="preview-wall">
+      <div class="hang-frame">
+        <div class="wire"></div>
+        <div class="screen-916 art-1">
+          <div class="moon"></div>
+          <div class="play-badge" style="width:42px;height:42px;"></div>
+          <div class="subtitle-band">疑是地上霜</div>
+          <div class="timecode">00:21 / 00:49</div>
+        </div>
+      </div>
+      <div class="wall-label">
+        <div class="t">静夜思 · 第 3 镜</div>
+        <div class="m">新中式水墨装裱 — 云阙 · 沉静男声 / 古琴 · 空山</div>
+      </div>
+
+      <!-- 长凳分镜条 -->
+      <div class="bench">
+        <div class="bench-head">
+          <span class="bench-title">Bench View — Storyboard</span>
+          <span class="bench-hint">长凳视角 · 点按任一镜跳转</span>
+        </div>
+        <div class="shots">
+          <div class="shot"><div class="thumb s1"><span class="no">01</span><span class="dur">8″</span></div><div class="cap">序 · 月夜旅舍</div></div>
+          <div class="shot"><div class="thumb s2"><span class="no">02</span><span class="dur">9″</span></div><div class="cap">月落窗前</div></div>
+          <div class="shot on"><div class="thumb s3"><span class="no">03</span><span class="dur">8″</span></div><div class="cap">疑是地上霜</div></div>
+          <div class="shot"><div class="thumb s4"><span class="no">04</span><span class="dur">9″</span></div><div class="cap">举头望明月</div></div>
+          <div class="shot"><div class="thumb s5"><span class="no">05</span><span class="dur">9″</span></div><div class="cap">低头思故乡</div></div>
+          <div class="shot"><div class="thumb s6"><span class="no">06</span><span class="reuse">复用</span><span class="dur">6″</span></div><div class="cap">尾声 · 千里共月</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer-bar">
+  <span class="serif">诗影工坊 · 方向 C — 画廊策展</span>
+  <span class="garamond">Gallery Curation · Draft 01</span>
+</footer>
+
+</body>
+</html>

@@ -132,9 +132,10 @@ export function buildScenes(
   });
 
   // ③ 尾声镜（字幕回到最后一句，旁白用收尾文案）
+  // 尾声不单独出图：reuseImage=true，画面工序直接复制最后一句镜的图（图生视频同样跳过），省一次出图成本
   const lastLine = lines[lines.length - 1] ?? analysis.title;
-  scenes.push(
-    mk(
+  scenes.push({
+    ...mk(
       lines.length + 1,
       outroKind,
       defs?.[lines.length + 1]?.label ?? "尾声",
@@ -143,7 +144,8 @@ export function buildScenes(
       script?.outro ? [script.outro] : narrationMode === "both" ? [] : [lastLine],
       defs?.[lines.length + 1]?.dur ?? DEFAULT_DURS.outro,
     ),
-  );
+    reuseImage: true,
+  });
 
   return scenes;
 }

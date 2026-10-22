@@ -9,12 +9,10 @@
 // ════════════════════════════════════════════════════════════════
 import type { PoemPersona, Scene } from "./types.ts";
 import { personaPromptBlock } from "./persona.ts";
+import { getArtStyle, type ArtStyle } from "./styles.ts";
 
-/** 全片统一的风格锚点（只约束风格与色调，不引入具体物件） */
-export const STYLE_ANCHOR =
-  "新中式水墨意境插画，古诗词配图。竖向 9:16 构图，大面积留白，宣纸质感；" +
-  "色调统一：深墨夜色、暖月白、少量朱砂红点缀，低饱和，静谧克制的电影感。" +
-  "画面中不要出现任何文字、书法、印章、logo 或水印。";
+/** 全片统一的风格锚点（只约束风格与色调，不引入具体物件）—— 默认水墨风格，保留以兼容旧调用 */
+export const STYLE_ANCHOR = getArtStyle("ink").styleAnchor;
 
 /**
  * 分镜类型的「构图与氛围参考」（与 svg.ts 的场景类型一一对应）。
@@ -71,7 +69,12 @@ export interface PoemBrief {
 }
 
 /** 为单个分镜生成图像提示词（poem.persona 存在时注入跨镜人物一致性约束） */
-export function sceneImagePrompt(poem: PoemBrief & { persona?: PoemPersona | null }, scene: Scene): string {
+export function sceneImagePrompt(
+  poem: PoemBrief & { persona?: PoemPersona | null },
+  scene: Scene,
+  style?: string | ArtStyle,
+): string {
+  const artStyle = typeof style === "string" || style === undefined ? getArtStyle(style) : style;
   const composition = KIND_COMPOSITIONS[scene.kind] ?? genericFromText(scene.subtitle + (scene.caption ?? ""));
   const caption = (scene.caption ?? "").trim().slice(0, 120);
   const subject = caption
@@ -80,7 +83,7 @@ export function sceneImagePrompt(poem: PoemBrief & { persona?: PoemPersona | nul
   const personaBlock = personaPromptBlock(poem.persona ?? null, scene);
   const titleNote = scene.kind === "title" ? "这是全片封面镜，为画面上方留出天空，构图端庄。" : "";
   return (
-    `${STYLE_ANCHOR}\n` +
+    `${artStyle.styleAnchor}\n` +
     `${subject}\n` +
     (personaBlock ? `${personaBlock}\n` : "") +
     `构图与氛围参考（仅用于构图、光线与气氛；若与文案冲突，以文案为准并省略冲突元素）：${composition}。${titleNote}\n` +

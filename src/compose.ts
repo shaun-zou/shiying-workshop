@@ -57,6 +57,11 @@ export async function composeVideo(input: ComposeStageInput): Promise<ComposeRes
   // ② 输入与滤镜链
   const args: string[] = ["-y", "-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-nostats"];
   scenes.forEach((s) => {
+    if (s.video && exists(s.video)) {
+      // 动效工序产出的真实视频镜头：直接作输入（合成滤镜里拉伸裁切到目标画布）
+      args.push("-i", s.video);
+      return;
+    }
     if (!s.image) throw new Error(`第 ${s.index + 1} 镜缺少图片`);
     args.push("-loop", "1", "-framerate", String(fps), "-t", (s.durMs / 1000).toFixed(3), "-i", s.image);
   });
@@ -77,12 +82,21 @@ export async function composeVideo(input: ComposeStageInput): Promise<ComposeRes
 
   const filters: string[] = [];
   scenes.forEach((s, i) => {
+    const dur = (s.durMs / 1000).toFixed(3);
+    if (s.video && exists(s.video)) {
+      // 视频镜头：已含真实运动，无需 zoompan；等比放大裁切到目标尺寸、统一到 fps 与镜长
+      filters.push(
+        `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},` +
+          `fps=${fps},trim=duration=${dur},setpts=PTS-STARTPTS[v${i}]`,
+      );
+      return;
+    }
     const frames = Math.max(1, Math.round((s.durMs / 1000) * fps));
     const { z, x, y } = zoompanExpr(i % 3, frames);
     filters.push(
       `[${i}:v]scale=${SW}:${SH}:force_original_aspect_ratio=increase,crop=${SW}:${SH},` +
         `zoompan=z='${z}':x='${x}':y='${y}':d=1:s=${width}x${height}:fps=${fps},` +
-        `trim=duration=${(s.durMs / 1000).toFixed(3)},setpts=PTS-STARTPTS[v${i}]`,
+        `trim=duration=${dur},setpts=PTS-STARTPTS[v${i}]`,
     );
   });
   const concatIn = scenes.map((_, i) => `[v${i}]`).join("");

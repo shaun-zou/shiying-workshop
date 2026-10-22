@@ -49,6 +49,7 @@ function applyOptions(options: Record<string, string | boolean>): void {
     ["image", "SHIYING_IMAGE_PROVIDER"],
     ["text-provider", "SHIYING_TEXT_PROVIDER"],
     ["voice-provider", "SHIYING_VOICE_PROVIDER"],
+    ["style", "SHIYING_STYLE"],
     ["size", "SHIYING_SIZE"],
     ["out", "SHIYING_OUT"],
   ];
@@ -80,6 +81,8 @@ function runOptionsFromArgs(args: CliArgs): RunOptions {
     outRoot: typeof o.out === "string" ? o.out : undefined,
     keepWatermark: o["crop-watermark"] === true ? false : undefined,
     freshImages: o["fresh-images"] === true ? true : undefined,
+    motion: typeof o.motion === "string" ? o.motion : undefined,
+    style: typeof o.style === "string" ? o.style : undefined,
     concurrency: typeof o.concurrency === "string" ? Number(o.concurrency) : undefined,
   };
 }
@@ -205,17 +208,21 @@ async function cmdRun(args: CliArgs): Promise<void> {
   if (!opts.poemId && !opts.text) {
     console.log(`用法：node src/cli.ts run --poem <id> | --text "诗句…" [--file 文件] [选项]\n`);
     console.log(`常用选项：`);
-    console.log(`  --image svg|seedream|siliconflow|cogview|openai   画面通道（默认 svg）`);
+    console.log(`  --image svg|seedream|siliconflow|agnes|cogview|openai   画面通道（默认 svg）`);
+    console.log(`  --style ink|gongbi|dunhuang|ukiyoe|oil|postimpression|impression|shinkai|pixel  艺术风格（默认 ink 水墨）`);
     console.log(`  --voice yunque|qingzheng|songfeng|none 朗诵音色`);
     console.log(`  --narration both|line                 旁白模式（诗句+旁白 / 只念诗句）`);
     console.log(`  --bgm guqin|rain|none                 配乐`);
     console.log(`  --size 1080x1920                      输出尺寸`);
     console.log(`  --crop-watermark                      seedream 出图时裁掉右下角水印区`);
     console.log(`  --fresh-images                        忽略画面缓存与复用，全量重出全部意境图`);
+    console.log(`  --motion none|agnes                   动效通道：agnes = 关键分镜图生视频（agnes-video-2.5-flash，默认首/尾镜）`);
     return;
   }
   const cfg = getConfig();
-  console.log(`\n${C.bold}诗影工坊${C.reset} ${C.dim}· 文本=${cfg.text.provider} 画面=${cfg.image.provider} 声音=${cfg.voice.provider} 配乐=${cfg.bgm} 尺寸=${cfg.size.label}${C.reset}`);
+  const motion = opts.motion ?? cfg.motion.provider;
+  const style = opts.style ?? cfg.style;
+  console.log(`\n${C.bold}诗影工坊${C.reset} ${C.dim}· 文本=${cfg.text.provider} 画面=${cfg.image.provider} 风格=${style} 声音=${cfg.voice.provider} 配乐=${cfg.bgm}${motion !== "none" ? ` 动效=${motion}` : ""} 尺寸=${cfg.size.label}${C.reset}`);
   const t0 = Date.now();
   const result = await runPipeline(opts, makeConsoleSink());
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
@@ -273,7 +280,8 @@ run 选项：
   --text "诗句…"          任意诗词文本
   --file <路径>           从文件读入诗词
   --title/--author/--dynasty   手工指定题名信息
-  --image svg|seedream|siliconflow|cogview|openai
+  --image svg|seedream|siliconflow|agnes|cogview|openai
+  --style ink|gongbi|dunhuang|ukiyoe|oil|postimpression|impression|shinkai|pixel
   --text-provider offline|glm|deepseek|openai
   --voice yunque|qingzheng|songfeng|none
   --narration both|line  旁白模式
@@ -281,6 +289,7 @@ run 选项：
   --size 1080x1920
   --crop-watermark       seedream 出图裁掉右下角水印区
   --fresh-images         忽略画面缓存与复用，全量重出全部意境图
+  --motion none|agnes    动效通道：agnes = 关键分镜图生视频（默认首/尾镜）
   --concurrency 2
 
 示例：

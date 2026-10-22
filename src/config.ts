@@ -5,6 +5,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_STYLE_ID } from "./styles.ts";
+import { applySettings } from "./settings.ts";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -53,6 +55,7 @@ const IMAGE_PRESETS: Record<string, { baseUrl: string; model: string }> = {
   zhipu: { baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "cogview-3-flash" },
   openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-image-1" },
   siliconflow: { baseUrl: "https://api.siliconflow.cn/v1", model: "Kwai-Kolors/Kolors" },
+  agnes: { baseUrl: "https://api.agnes-ai.cn/v1", model: "agnes-image-2.5-flash" },
 };
 
 // ── 声音工序预设 ────────────────────────────────────────────────
@@ -71,6 +74,10 @@ export interface AppConfig {
   text: ProviderConfig;
   image: ProviderConfig;
   voice: ProviderConfig;
+  /** 动效工序（图生视频）：none | agnes；agnes 的端点/模型/Key 可在工作台设置层覆盖 */
+  motion: { provider: string; baseUrl: string; model: string; apiKey: string };
+  /** 艺术风格（画面 / 动效共用） */
+  style: string;
   bgm: string;
   size: { width: number; height: number; label: string };
   outRoot: string;
@@ -96,9 +103,12 @@ export function getConfig(): AppConfig {
 
   const textPreset = TEXT_PRESETS[textProvider] ?? { baseUrl: "", model: "" };
   const imagePreset = IMAGE_PRESETS[imageProvider] ?? { baseUrl: "", model: "" };
+  // 多通道并存：优先读按通道命名的 Key（如 SHIYING_IMAGE_API_KEY_AGNES），缺省回退通用 Key
+  const imageKey = env(`SHIYING_IMAGE_API_KEY_${imageProvider.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`) || env("SHIYING_IMAGE_API_KEY");
   const voicePreset = VOICE_PRESETS[voiceProvider] ?? { baseUrl: "", model: "" };
 
-  return {
+  // 工作台设置层（data/studio-settings.json）最后覆盖：节点留空的字段回落 .env 值
+  return applySettings({
     text: {
       provider: textProvider,
       apiKey: env("SHIYING_TEXT_API_KEY"),
@@ -107,7 +117,7 @@ export function getConfig(): AppConfig {
     },
     image: {
       provider: imageProvider,
-      apiKey: env("SHIYING_IMAGE_API_KEY"),
+      apiKey: imageKey,
       baseUrl: env("SHIYING_IMAGE_BASE_URL", imagePreset.baseUrl),
       model: env("SHIYING_IMAGE_MODEL", imagePreset.model),
     },
@@ -117,13 +127,20 @@ export function getConfig(): AppConfig {
       baseUrl: env("SHIYING_VOICE_BASE_URL", voicePreset.baseUrl),
       model: env("SHIYING_VOICE_MODEL", voicePreset.model),
     },
+    motion: {
+      provider: env("SHIYING_MOTION_PROVIDER", "none"),
+      baseUrl: env("SHIYING_MOTION_BASE_URL", "https://api.agnes-ai.cn/v1"),
+      model: env("SHIYING_MOTION_MODEL", "agnes-video-2.5-flash"),
+      apiKey: env("SHIYING_IMAGE_API_KEY_AGNES") || env("SHIYING_IMAGE_API_KEY"),
+    },
+    style: env("SHIYING_STYLE", DEFAULT_STYLE_ID),
     bgm: env("SHIYING_BGM_PROVIDER", "synth"),
     size: parseSize(env("SHIYING_SIZE", "1080x1920")),
     outRoot: env("SHIYING_OUT", path.join(ROOT, "output")),
     concurrency: Number(env("SHIYING_CONCURRENCY", "2")) || 2,
     keepWatermark: env("SHIYING_KEEP_WATERMARK", "1") !== "0",
     seedreamTokenService: env("SHIYING_SEEDREAM_TOKEN_SERVICE", "http://127.0.0.1:18432/get_token"),
-  };
+  });
 }
 
 /** 中文音色档案：原型里的「云阙 / 清徵 / 松风」映射到真实 TTS 参数 */

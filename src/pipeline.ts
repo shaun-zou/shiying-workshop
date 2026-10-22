@@ -87,6 +87,7 @@ export async function runPipeline(opts: RunOptions, sink: EventSink, controls: P
   }
 
   // ── ③ 画面工序 ────────────────────────────────────────────────
+  const style = opts.style ?? cfg.style;
   await generateImages({
     scenes,
     analysis,
@@ -95,7 +96,15 @@ export async function runPipeline(opts: RunOptions, sink: EventSink, controls: P
     emit,
     reuseFrom: opts.freshImages ? undefined : opts.reuseImagesFrom,
     freshImages: opts.freshImages === true,
+    style,
   });
+
+  // ── ③.5 动效工序（可选：关键分镜图生视频，替换静态图+程序运镜） ──
+  const motionProvider = (opts.motion ?? cfg.motion.provider) || "none";
+  if (motionProvider === "agnes") {
+    const { generateMotion } = await import("./motion.ts");
+    await generateMotion({ scenes, analysis, jobDir: dir, cacheDir, emit, style });
+  }
 
   // ── ④ 声音工序 ────────────────────────────────────────────────
   const profileId = opts.voiceProfile ?? "qingzheng";
@@ -129,9 +138,11 @@ export async function runPipeline(opts: RunOptions, sink: EventSink, controls: P
     providers: {
       text: `${analysis.origin.text}:${analysis.origin.provider}`,
       image: cfg.image.provider,
+      motion: motionProvider,
       voice: voiceOn ? cfg.voice.provider : "none",
       bgm: bgmWav ? bgmKind : "none",
     },
+    style,
     size: cfg.size.label,
     fps: 30,
     poem: { title: analysis.title, author: analysis.author, dynasty: analysis.dynasty, lines: analysis.lines },
@@ -145,7 +156,9 @@ export async function runPipeline(opts: RunOptions, sink: EventSink, controls: P
       startMs: starts[i]!,
       durMs: s.durMs,
       image: s.image ? path.basename(s.image) : null,
+      clip: s.video ? path.basename(s.video) : null,
       audio: s.audio ? path.basename(s.audio) : null,
+      reuseImage: s.reuseImage === true,
     })),
     files: {
       video: path.basename(video),

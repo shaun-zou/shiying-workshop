@@ -1,5 +1,7 @@
 node_modules/
 output/
 .env
+data/studio-settings.json
+data/studio.key
 *.log
 .DS_Store
